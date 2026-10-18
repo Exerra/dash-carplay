@@ -67,6 +67,7 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
     val mfi: MfiAuthenticator by lazy { MfiIdentity.load(config) }
 
     @Volatile private var activeSession: AirPlaySession? = null
+    @Volatile private var nightMode = false
     @Volatile private var serverSocket: ServerSocket? = null
     @Volatile private var advertiser: ServiceAdvertiser? = null
     private val secondarySockets = mutableListOf<ServerSocket>()
@@ -103,12 +104,14 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
             model = config.model,
             oemLabel = config.deviceName,
             icons = oemIcons,
+            nightMode = nightMode,
         )
 
     private val listener = object : AirPlaySessionListener {
         override fun onSessionActive(session: AirPlaySession) {
             log.info("CarPlay session active peer={}", session.host)
             activeSession = session
+            session.setNightMode(nightMode)
             hub.setSessionState(true, null)
         }
 
@@ -214,6 +217,7 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
                     media = media,
                 )
                 activeSession = session
+                session.setNightMode(nightMode)
                 val bootstrap = wireless
                 handoff.begin(session) {
                     log.info("wireless handoff ready; releasing Bluetooth bootstrap")
@@ -228,6 +232,14 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
     }
 
     private fun routeInput(message: ClientMessage) {
+        // Appearance is receiver state too: retain it between phone sessions.
+        if (message.type == "night") {
+            message.night?.let { night ->
+                nightMode = night
+                activeSession?.setNightMode(night)
+            }
+            return
+        }
         val session = activeSession ?: return
         try {
             when (message.type) {
@@ -250,7 +262,6 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
                 }
                 "siri" -> if (message.pressed == null) session.invokeSiri() else session.setSiriPressed(message.pressed)
                 "telephony" -> message.telephony?.let { session.sendTelephony(it, message.pressed) }
-                "night" -> message.night?.let(session::setNightMode)
                 "show-ui" -> {
                     session.sendCommand(mapOf("type" to "showUI", "params" to mapOf("uuid" to AirPlayInfoPlist.MAIN_UUID)))
                     bridge.requestKeyFrame(110)

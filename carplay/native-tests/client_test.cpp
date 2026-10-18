@@ -254,6 +254,28 @@ class CarPlayNativeTest : public QObject {
         QCOMPARE(cp.size(), size_t(20));
     }
 
+    void appearanceIsSentBeforePhoneConnectionAndReappliedForTheSession() {
+        CarPlayClient client; client.setNightMode(true);
+        QWebSocketServer server("appearance", QWebSocketServer::NonSecureMode);
+        QVERIFY(server.listen(QHostAddress::LocalHost, 0));
+        QTemporaryDir directory; QFile file(directory.filePath("connection.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(QJsonObject{{"url", QString("ws://127.0.0.1:%1/ws?token=fixture").arg(server.serverPort())}}).toJson()); file.close();
+        QVERIFY(client.connectFile(file.fileName())); QTRY_VERIFY(server.hasPendingConnections());
+        auto *peer = server.nextPendingConnection(); QSignalSpy input(peer, &QWebSocket::textMessageReceived);
+        auto night = [&](int index) {
+            const auto message = QJsonDocument::fromJson(input.at(index).at(0).toString().toUtf8()).object();
+            return message.value("type").toString() == "night" && message.value("night").toBool();
+        };
+        peer->sendTextMessage("{\"type\":\"hello\",\"sessionActive\":false}");
+        QTRY_COMPARE(input.size(), 1); QVERIFY(night(0)); QVERIFY(!client.sessionActive());
+        client.setNightMode(false); QTRY_COMPARE(input.size(), 2); QVERIFY(!night(1));
+        peer->sendTextMessage("{\"type\":\"session\",\"sessionActive\":true}");
+        QTRY_COMPARE(input.size(), 3); QVERIFY(!night(2)); QVERIFY(client.sessionActive());
+        client.setNightMode(true); QTRY_COMPARE(input.size(), 4); QVERIFY(night(3));
+        client.disconnectReceiver(); peer->deleteLater();
+    }
+
     void sharedControlsReachCarPlayWithHeldStatesAndNoStaleSessionButtons() {
         using Command = PhoneControls::Command;
         using State = PhoneControls::State;

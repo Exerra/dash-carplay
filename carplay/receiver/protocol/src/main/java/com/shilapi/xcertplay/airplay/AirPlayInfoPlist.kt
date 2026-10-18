@@ -30,9 +30,9 @@ object AirPlayInfoPlist {
 
     fun build(config: AirPlayConfig): Map<String, Any?> {
         val displays = arrayListOf<Any?>(
-            displayEntry(config.main, STREAM_TYPE_MAIN_SCREEN, MAIN_UUID),
+            displayEntry(config.main, STREAM_TYPE_MAIN_SCREEN, MAIN_UUID, config.nightMode),
         )
-        config.cluster?.let { displays.add(displayEntry(it, STREAM_TYPE_ALT_SCREEN, ALT_UUID)) }
+        config.cluster?.let { displays.add(displayEntry(it, STREAM_TYPE_ALT_SCREEN, ALT_UUID, config.nightMode)) }
 
         val info = linkedMapOf<String, Any?>(
             "sourceVersion" to config.sourceVersion,
@@ -44,6 +44,7 @@ object AirPlayInfoPlist {
             "bluetoothIDs" to listOf(config.btMac),
             "name" to config.deviceName,
             "rightHandDrive" to config.rightHandDrive,
+            "nightMode" to config.nightMode,
             "keepAliveLowPower" to false,
             "keepAliveSendStatsAsBody" to false,
             "modes" to modes(),
@@ -154,7 +155,7 @@ object AirPlayInfoPlist {
         )
     }
 
-    private fun displayEntry(display: AirPlayDisplayConfig, type: Int, uuid: String): Map<String, Any?> {
+    private fun displayEntry(display: AirPlayDisplayConfig, type: Int, uuid: String, night: Boolean): Map<String, Any?> {
         val widthPhysical = AirPlayDisplaySettings.sanitizeReportedPhysicalMm(
             display.widthPhysicalMm ?: AirPlayDisplaySettings.DEFAULT_WIDTH_PHYSICAL_MM,
         )
@@ -176,6 +177,12 @@ object AirPlayInfoPlist {
             "heightPhysical" to heightPhysical,
             "features" to (display.features ?: (DISPLAY_FEATURE_HIGH_FIDELITY_TOUCH or DISPLAY_FEATURE_KNOBS)),
             "primaryInputDevice" to display.primaryInputDevice,
+            // Match Dash explicitly instead of deferring light mode to the
+            // phone's location/time-of-day fallback.
+            "uiAppearanceMode" to CarPlayAppearance.mode(night),
+            "uiAppearanceSetting" to CarPlayAppearance.MANUAL,
+            "mapAppearanceMode" to CarPlayAppearance.mode(night),
+            "mapAppearanceSetting" to CarPlayAppearance.MANUAL,
         )
 
         entry["viewAreas"] = listOf(areaDict(display))

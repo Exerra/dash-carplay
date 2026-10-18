@@ -123,7 +123,9 @@ void CarPlayClient::textMessage(const QString &data) {
         sessionActive_ = active;
         if (!active) heldControls_.clear();
         if (!active) stopMedia();
-        else setNightMode(night_);
+        // Seed the receiver even before a phone connects, so its initial /info
+        // reply and the next phone session use Dash's current appearance.
+        setNightMode(night_);
         emit statusChanged(active ? "CarPlay connected" : "Receiver ready. Waiting for iPhone.");
     } else if (type == "host-ui") {
         emit hostUiRequested();

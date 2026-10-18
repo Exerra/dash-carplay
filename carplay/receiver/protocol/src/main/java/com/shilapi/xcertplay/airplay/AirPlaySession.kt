@@ -81,7 +81,9 @@ class AirPlaySession(
     private var eventSocket: Socket? = null
     private var eventCipher: ControlCipher? = null
     private var eventCseq = 0
+    @Volatile private var nightMode = config.nightMode
     private var pendingNightMode: Boolean? = null
+    private val appearanceCommands = linkedMapOf<Int, Pair<String, Boolean>>()
     private val firstTouchSendLogged = AtomicBoolean(false)
     private val touchSendFailureLogged = AtomicBoolean(false)
     private val ntp = NtpClock()
@@ -251,17 +253,22 @@ class AirPlaySession(
     }
 
     fun setNightMode(night: Boolean): Boolean = synchronized(eventWriteLock) {
+        nightMode = night
         pendingNightMode = night
         sendPendingNightModeLocked()
     }
 
     private fun sendPendingNightModeLocked(): Boolean {
         val night = pendingNightMode ?: return true
-        val sent = sendCommandLocked(
-            linkedMapOf("type" to "setNightMode", "params" to linkedMapOf("nightMode" to night)),
-        )
-        if (sent) pendingNightMode = null
-        return sent
+        for (command in CarPlayAppearance.commands(night, config.cluster != null)) {
+            if (!sendCommandLocked(command)) return false
+            // Bound diagnostics if a peer never acknowledges commands.
+            if (appearanceCommands.size >= 32) appearanceCommands.remove(appearanceCommands.keys.first())
+            appearanceCommands[eventCseq] = command["type"].toString() to night
+        }
+        pendingNightMode = null
+        debugLog("airplay appearance sent night=$night")
+        return true
     }
 
     private fun sendHidReport(uid: Int, report: ByteArray): Boolean =
@@ -385,7 +392,7 @@ class AirPlaySession(
                 else RtspMessage.Response(headers = mapOf("Content-Type" to OCTET_CONTENT_TYPE), body = body)
             }
             path.endsWith("/info") -> {
-                val info = AirPlayInfoPlist.build(config)
+                val info = AirPlayInfoPlist.build(config.copy(nightMode = nightMode))
                 if (request.body.isNotEmpty()) {
                     val requestInfo = try {
                         BplistCodec.decode(request.body).toString()
@@ -695,7 +702,13 @@ class AirPlaySession(
                 val parsed = RtspMessage.parseMessages(plaintext)
                 plaintext = parsed.rest
                 for (message in parsed.messages) {
-                    if (message.method.startsWith("RTSP/") || message.method.startsWith("HTTP/")) continue
+                    if (message.method.startsWith("RTSP/") || message.method.startsWith("HTTP/")) {
+                        val appearance = synchronized(eventWriteLock) {
+                            appearanceCommands.remove(message.headers["cseq"]?.toIntOrNull())
+                        }
+                        if (appearance != null) debugLog("airplay appearance reply type=${appearance.first} night=${appearance.second} status=${message.path}")
+                        continue
+                    }
                     debugLog(
                         "airplay event rx ${message.method} ${message.path} cseq=${message.headers["cseq"] ?: "-"} body=${message.body.size}",
                     )

@@ -51,4 +51,5 @@ data class AirPlayConfig(
     val model: String = "xcertplay",
     val oemLabel: String = "xcertplay",
     val icons: List<AirPlayIcon> = emptyList(),
+    val nightMode: Boolean = false,
 )

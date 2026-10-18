@@ -15,6 +15,9 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   page list. Existing numeric page and shortcut IDs are preserved.
 - Native H.264 decoding, latest-frame rendering, letterboxed touch/mouse mapping,
   two-contact touch messages, knob keys, Home, theme and volume forwarding.
+- Dash light/dark mode is retained between connections and passed through the
+  initial display configuration plus live interface/map appearance updates.
+  The user confirmed that CarPlay now follows Dash's mode changes.
 - GPU I420 colour conversion/scaling, retained decoder buffers and shared-storage
   native packet ingestion. Software rendering remains available. The Pi's live
   V3D path and user playback/input/return checks passed; see `PERFORMANCE.md` for

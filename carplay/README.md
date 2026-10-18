@@ -87,6 +87,10 @@ Buttons, selected tabs and phones, focus borders and keyboard selections use
 Dash's configured accent colour. Changes apply immediately, including to an open
 wizard or dialog; text on accent backgrounds switches between black and white
 for contrast.
+Dash also forwards its light/dark mode to CarPlay's interface and maps, using
+both the night-mode signal and per-display appearance updates. The receiver
+retains it between phone connections, advertises the current mode in the initial
+configuration, and sends live changes over the control channel.
 
 - Save several named iPhones, rename or remove them under **Phone options**, and choose which phone to
   connect. One phone is active at a time. Removing a saved entry keeps its system
