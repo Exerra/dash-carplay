@@ -62,6 +62,8 @@ Makefile
 *_autogen/
 gitversion.h
 openauto.ini
+/carplay/runtime/
+!carplay/receiver/gradle/wrapper/gradle-wrapper.jar
 
 # Plugins #
 ###########

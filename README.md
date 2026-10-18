@@ -21,6 +21,14 @@ Main features of Dash include:
 
 # Getting Started
 
+## Experimental CarPlay
+
+An optional native CarPlay page and bundled receiver are being developed in this
+repository. Enable it with `CARPLAY_BUILD=ON`; it is off by default. See
+[setup instructions](carplay/README.md) and [current validation status](carplay/STATUS.md).
+Pi/iPhone hardware testing is still required. The first prototype uses a shared
+Wi-Fi network; wired USB and microphone uplink are not yet implemented.
+
 ## Video walk through
 _steps may be slightly different such as ia (intelligent-auto) has been renamed to dash, the UI has changed, etc..._
 

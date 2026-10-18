@@ -1,0 +1,25 @@
+# Build outputs
+build/
+.gradle/
+**/build/
+web/node_modules/
+web/dist/
+
+# Recovered MFi identity: never commit. See identity/README.md.
+identity/*
+!identity/README.md
+
+# Runtime state
+state/
+
+# macOS helper binary
+macos/bt-bridge/bt-bridge
+
+# Editors / OS
+.DS_Store
+*.iml
+.idea/
+.vscode/
+.venv/
+__pycache__/
+*.pyc

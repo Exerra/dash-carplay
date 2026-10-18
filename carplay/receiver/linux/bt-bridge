@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+bridge_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+bridge_python=${PLAYPORT_PYTHON:-$bridge_dir/../.venv/bin/python}
+if [ ! -x "$bridge_python" ]; then bridge_python=python3; fi
+exec "$bridge_python" "$bridge_dir/bt_bridge.py" "$@"

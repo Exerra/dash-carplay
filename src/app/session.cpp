@@ -23,6 +23,9 @@
 #include "aasdk_proto/ButtonCodeEnum.pb.h"
 
 #include "app/session.hpp"
+#ifdef DASH_CARPLAY
+#include "app/pages/carplay.hpp"
+#endif
 
 QDir Session::plugin_dir(QString plugin)
 {
@@ -125,6 +128,10 @@ Session::Layout::Layout(QSettings &settings, Arbiter &arbiter)
         new LauncherPage(arbiter),
         new SettingsPage(arbiter)
     };
+#ifdef DASH_CARPLAY
+    // Append: existing numeric page IDs in saved settings must remain stable.
+    this->pages_.append(new CarPlayPage(arbiter));
+#endif
 
     settings.beginGroup("Layout");
     settings.beginGroup("Page");
@@ -414,6 +421,10 @@ Session::Core::Core(QSettings &settings, Arbiter &arbiter)
     };
 
     for (auto page : arbiter.layout().pages()) {
+#ifdef DASH_CARPLAY
+        // Append its shortcut after the old Cycle Page action to preserve saved action IDs.
+        if (page->name() == "CarPlay") continue;
+#endif
         auto callback = [&arbiter, page](Action::ActionState actionState){
             if (actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) {
                 QMetaObject::invokeMethod(&arbiter, [&arbiter, page]{
@@ -436,6 +447,15 @@ Session::Core::Core(QSettings &settings, Arbiter &arbiter)
     }
 
 
+#ifdef DASH_CARPLAY
+    for (auto page : arbiter.layout().pages()) {
+        if (page->name() != "CarPlay") continue;
+        this->actions_.append(new Action("Show CarPlay Page", [&arbiter, page](Action::ActionState state) {
+            if (state == Action::ActionState::Triggered || state == Action::ActionState::Activated)
+                QMetaObject::invokeMethod(&arbiter, [&arbiter, page] { arbiter.set_curr_page(page); }, Qt::QueuedConnection);
+        }, arbiter.window()));
+    }
+#endif
     settings.beginGroup("Core");
     settings.beginGroup("Action");
     for (auto i = 0; i < this->actions_.size(); i++) {

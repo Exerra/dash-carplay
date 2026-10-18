@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.7.0)
 project(dash CXX)
+option(CARPLAY_BUILD "Build experimental native CarPlay support" OFF)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
@@ -83,6 +84,20 @@ file(GLOB_RECURSE source_files ${sources_directory}/*.cpp ${include_directory}/*
 add_subdirectory(plugins)
 
 add_executable(dash ${source_files})
+
+if(CARPLAY_BUILD)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(CARPLAY_GST REQUIRED IMPORTED_TARGET
+        gstreamer-1.0>=1.14 gstreamer-app-1.0 gstreamer-video-1.0)
+    target_compile_definitions(dash PRIVATE DASH_CARPLAY
+        DASH_CARPLAY_RUNNER="${base_directory}/carplay/run.sh"
+        DASH_CARPLAY_IDENTITY_DIR="${base_directory}/carplay/runtime/identity")
+    target_link_libraries(dash PkgConfig::CARPLAY_GST)
+    add_custom_target(carplay-receiver
+        COMMAND "${base_directory}/carplay/build.sh"
+        WORKING_DIRECTORY "${base_directory}/carplay"
+        COMMENT "Building the bundled CarPlay receiver")
+endif()
 
 include(${base_directory}/cmake_modules/gitversion.cmake)
 

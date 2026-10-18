@@ -34,6 +34,9 @@ OpenAutoWorker::OpenAutoWorker(std::function<void(bool)> callback, bool night_mo
 
 OpenAutoWorker::~OpenAutoWorker()
 {
+    // Workers must observe shutdown before joining; the Asio work guard keeps
+    // run() alive indefinitely otherwise.
+    this->io_service.stop();
     std::for_each(this->thread_pool.begin(), this->thread_pool.end(),
                   std::bind(&std::thread::join, std::placeholders::_1));
     libusb_exit(this->usb_context);
@@ -42,7 +45,8 @@ OpenAutoWorker::~OpenAutoWorker()
 void OpenAutoWorker::create_usb_workers()
 {
     std::function<void()> worker = [this]() {
-        timeval event_timeout = {180, 0};
+        // Bound the wait so USB workers also notice shutdown without a device event.
+        timeval event_timeout = {0, 250000};
         while (!this->io_service.stopped())
             libusb_handle_events_timeout_completed(this->usb_context, &event_timeout, nullptr);
     };

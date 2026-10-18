@@ -38,6 +38,8 @@ Config::Config()
 
 Config *Config::get_instance()
 {
-    static Config config;
-    return &config;
+    // QApplication owns QObject children, so the singleton must live on the
+    // heap rather than in static storage that Qt would try to free on exit.
+    static Config *config = new Config();
+    return config;
 }
