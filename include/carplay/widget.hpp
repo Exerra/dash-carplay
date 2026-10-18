@@ -16,7 +16,7 @@ class CarPlayWidget : public QWidget {
     explicit CarPlayWidget(QWidget *parent = nullptr);
     ~CarPlayWidget() override;
     void setAndroidAutoActive(bool active);
-    void setNightMode(bool night) { client_->setNightMode(night); }
+    void setNightMode(bool night);
     void setVolume(int percent) { client_->setVolume(percent); }
     void showSetup();
  signals:

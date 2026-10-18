@@ -2,17 +2,16 @@
 #include "carplay/widget.hpp"
 #include "carplay/surface.hpp"
 #include "carplay/phone_wizard.hpp"
+#include "carplay/touch_ui.hpp"
+#include <QButtonGroup>
+#include <QDialog>
 #include <QDir>
 #include <QFileDialog>
 #include <QFormLayout>
-#include <QGroupBox>
-#include <QInputDialog>
-#include <QMessageBox>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QScrollArea>
 #include <QSettings>
-#include <QToolButton>
 #include <QVBoxLayout>
 
 namespace {
@@ -20,8 +19,7 @@ bool validAddress(const QString &value) {
     return QRegularExpression("^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$").match(value).hasMatch();
 }
 QPushButton *button(const QString &text, const char *name, QWidget *parent) {
-    auto *result = new QPushButton(text, parent);
-    result->setObjectName(name); result->setMinimumHeight(44); return result;
+    return CarPlayTouch::button(text, name, parent);
 }
 }
 
@@ -39,18 +37,37 @@ void CarPlayWidget::init() {
     stateDirectory_ = qEnvironmentVariable("XDG_STATE_HOME", QDir::homePath() + "/.local/state") + "/opendash/carplay";
     QSettings saved;
     pages_ = new QStackedWidget(this); pages_->setObjectName("carplayViews"); layout->addWidget(pages_);
-    auto *scroll = new QScrollArea(pages_); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
-    auto *content = new QWidget(scroll); auto *body = new QVBoxLayout(content);
-    body->setContentsMargins(24, 16, 24, 16); body->setSpacing(16);
-    auto *heading = new QLabel("CarPlay", content);
-    QFont title = heading->font(); title.setBold(true); heading->setFont(title); body->addWidget(heading);
-    status_ = new QLabel("Choose a saved iPhone or add a new one. One phone connects at a time.", content);
-    status_->setObjectName("carplayStatus"); status_->setWordWrap(true); body->addWidget(status_);
-    settings_ = new QWidget(content); auto *settingsLayout = new QVBoxLayout(settings_);
-    settingsLayout->setContentsMargins(0, 0, 0, 0); settingsLayout->setSpacing(16);
-
-    auto *phoneGroup = new QGroupBox("Your iPhones", settings_); auto *phoneLayout = new QVBoxLayout(phoneGroup);
-    phones_ = new QComboBox(phoneGroup); phones_->setObjectName("savedPhones"); phones_->setMinimumHeight(44);
+    auto *content = new QWidget(pages_); content->setObjectName("carplayManagement");
+    setup_ = content; setProperty("carplayDark", true);
+    auto *outer = new QHBoxLayout(content); outer->setContentsMargins(0,0,0,0);
+    auto *canvas = new QWidget(content); canvas->setMaximumSize(1040,720);
+    outer->addStretch(); outer->addWidget(canvas, 1); outer->addStretch();
+    auto *body = new QVBoxLayout(canvas); body->setContentsMargins(20,16,20,16); body->setSpacing(12);
+    auto *header = new QHBoxLayout(); auto *titles = new QVBoxLayout(); titles->setSpacing(4);
+    auto *heading = new QLabel("CarPlay", content); heading->setObjectName("touchTitle"); titles->addWidget(heading);
+    status_ = new QLabel("Choose an iPhone to get started.", content);
+    status_->setObjectName("carplayStatus"); status_->setProperty("secondary", true); status_->setWordWrap(true); titles->addWidget(status_);
+    header->addLayout(titles, 1);
+    resume_ = button("Return to CarPlay", "resumeCarPlay", content); resume_->setProperty("primary", true); resume_->setVisible(false); header->addWidget(resume_);
+    body->addLayout(header);
+    auto *navigation = new QHBoxLayout(); navigation->setSpacing(8); body->addLayout(navigation);
+    auto *sections = new QStackedWidget(content); sections->setObjectName("carplaySections"); settings_ = sections; body->addWidget(sections, 1);
+    auto *tabs = new QButtonGroup(this); tabs->setExclusive(true);
+    for (const auto &title : {QString("Phones"), QString("Display"), QString("Setup")}) {
+        auto *tab = button(title, "carplaySection", content); tab->setProperty("navigation", true); tab->setCheckable(true);
+        const int index = tabs->buttons().size(); tabs->addButton(tab, index); navigation->addWidget(tab, 1);
+        if (index == 0) tab->setChecked(true);
+        connect(tab, &QPushButton::clicked, sections, [sections, index] { sections->setCurrentIndex(index); });
+    }
+    auto addSection = [sections](QWidget *panel) {
+        auto *scroll = new QScrollArea(sections); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
+        scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff); scroll->setWidget(panel);
+        CarPlayTouch::scroll(scroll->viewport()); sections->addWidget(scroll);
+    };
+    auto *phoneGroup = new QWidget(sections); auto *phoneLayout = new QVBoxLayout(phoneGroup);
+    phoneLayout->setContentsMargins(0, 4, 0, 4); phoneLayout->setSpacing(12);
+    auto *phoneHint = new QLabel("Your saved iPhones. One connects at a time.", phoneGroup); phoneHint->setWordWrap(true); phoneHint->setProperty("secondary", true); phoneLayout->addWidget(phoneHint);
+    phones_ = new CarPlayTouchChoice("Choose an iPhone", phoneGroup); phones_->setObjectName("savedPhones");
     const int count = saved.beginReadArray("CarPlay/phones");
     for (int i = 0; i < count; ++i) {
         saved.setArrayIndex(i);
@@ -67,35 +84,58 @@ void CarPlayWidget::init() {
     auto *add = button("Add iPhone", "addPhone", phoneGroup);
     auto *rename = button("Rename", "renamePhone", phoneGroup);
     auto *remove = button("Remove", "removePhone", phoneGroup);
-    phoneActions->addWidget(add); phoneActions->addWidget(rename); phoneActions->addWidget(remove);
-    phoneLayout->addLayout(phoneActions); settingsLayout->addWidget(phoneGroup);
+    auto *options = button("Phone options", "phoneOptions", phoneGroup);
+    options->setEnabled(phones_->count() > 0);
+    connect(phones_, QOverload<int>::of(&QComboBox::currentIndexChanged), options, [options](int index) { options->setEnabled(index >= 0); });
+    phoneActions->addWidget(add, 1); phoneActions->addWidget(options, 1); rename->hide(); remove->hide();
+    connect(options, &QPushButton::clicked, this, [this, rename, remove] {
+        if (phones_->currentIndex() < 0) return;
+        QDialog dialog(this); dialog.setWindowTitle(phones_->currentText()); CarPlayTouch::theme(&dialog, CarPlayTouch::dark(this));
+        dialog.resize(qMin(600, window()->width() - 40), 280); auto *layout = new QVBoxLayout(&dialog); layout->setSpacing(12);
+        auto *renameAction = button("Rename iPhone", "renameAction", &dialog);
+        auto *removeAction = button("Remove saved iPhone", "removeAction", &dialog); removeAction->setProperty("danger", true);
+        auto *cancel = button("Cancel", "cancelPhoneOptions", &dialog);
+        layout->addWidget(renameAction); layout->addWidget(removeAction); layout->addWidget(cancel);
+        int action = 0;
+        connect(renameAction, &QPushButton::clicked, &dialog, [&] { action = 1; dialog.accept(); });
+        connect(removeAction, &QPushButton::clicked, &dialog, [&] { action = 2; dialog.accept(); });
+        connect(cancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+        if (dialog.exec() == QDialog::Accepted) { if (action == 1) rename->click(); else if (action == 2) remove->click(); }
+    });
+    phoneLayout->addLayout(phoneActions); phoneLayout->addStretch(1); addSection(phoneGroup);
 
-    auto *display = new QGroupBox("Display", settings_); auto *displayForm = new QFormLayout(display);
-    resolution_ = new QComboBox(display); resolution_->setObjectName("resolutionPreset");
+    auto *display = new QWidget(sections); auto *displayForm = new QVBoxLayout(display); displayForm->setContentsMargins(0,4,0,4); displayForm->setSpacing(12);
+    resolution_ = new CarPlayTouchChoice("Resolution", display); resolution_->setObjectName("resolutionPreset");
     const QList<QSize> sizes = {{800,480}, {1024,600}, {1280,720}, {1920,1080}, {1920,720}};
     for (const auto &size : sizes)
         resolution_->addItem(QString("%1 × %2%3").arg(size.width()).arg(size.height()).arg(size == QSize(800,480) ? " · Low load" : ""), size);
     resolution_->addItem("Custom", QSize());
-    width_ = new QSpinBox(display); width_->setObjectName("carplayWidth"); width_->setRange(480, 3840); width_->setSingleStep(2);
-    height_ = new QSpinBox(display); height_->setObjectName("carplayHeight"); height_->setRange(480, 3840); height_->setSingleStep(2);
+    width_ = new CarPlayTouchNumber(display); width_->setObjectName("carplayWidth"); width_->setRange(480, 3840); width_->setSingleStep(2);
+    height_ = new CarPlayTouchNumber(display); height_->setObjectName("carplayHeight"); height_->setRange(480, 3840); height_->setSingleStep(2);
     width_->setValue(saved.value("CarPlay/width", 800).toInt()); height_->setValue(saved.value("CarPlay/height", 480).toInt());
     int preset = resolution_->findData(QSize(width_->value(), height_->value()));
     resolution_->setCurrentIndex(preset >= 0 ? preset : resolution_->count() - 1);
-    auto *custom = new QWidget(display); auto *customLayout = new QHBoxLayout(custom); customLayout->setContentsMargins(0,0,0,0);
-    customLayout->addWidget(width_); customLayout->addWidget(new QLabel("×", custom)); customLayout->addWidget(height_);
+    auto *custom = new QWidget(display); auto *customLayout = new QVBoxLayout(custom); customLayout->setContentsMargins(0,0,0,0); customLayout->setSpacing(6);
+    auto *customLabel = new QLabel("Width × height", custom); customLayout->addWidget(customLabel);
+    auto *times = new QLabel("×", custom); times->setFixedWidth(24); times->setAlignment(Qt::AlignCenter);
+    auto *dimensions = new QHBoxLayout(); dimensions->addWidget(width_, 1); dimensions->addWidget(times); dimensions->addWidget(height_, 1); customLayout->addLayout(dimensions);
     custom->setVisible(preset < 0);
-    auto *customLabel = new QLabel("Custom size", display); customLabel->setVisible(preset < 0);
-    connect(resolution_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, custom, customLabel](int index) {
+    connect(resolution_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, custom](int index) {
         const auto size = resolution_->itemData(index).toSize(); custom->setVisible(size.isEmpty());
-        customLabel->setVisible(size.isEmpty());
         if (!size.isEmpty()) { width_->setValue(size.width()); height_->setValue(size.height()); }
     });
-    fps_ = new QComboBox(display); fps_->setObjectName("carplayFps"); fps_->addItem("30 fps", 30); fps_->addItem("60 fps", 60);
+    fps_ = new CarPlayTouchChoice("Frame rate", display); fps_->setObjectName("carplayFps"); fps_->addItem("30 fps", 30); fps_->addItem("60 fps", 60);
     fps_->setCurrentIndex(saved.value("CarPlay/fps", 30).toInt() == 60 ? 1 : 0);
-    displayForm->addRow("Resolution", resolution_); displayForm->addRow(customLabel, custom); displayForm->addRow("Frame rate", fps_);
-    auto *hint = new QLabel("Higher resolutions and 60 fps need more processing power. Changes take effect when CarPlay reconnects.", display);
-    hint->setWordWrap(true); displayForm->addRow(hint);
-    auto *apply = button("Apply && reconnect", "applyDisplay", display); displayForm->addRow(apply);
+    auto *displayChoices = new QHBoxLayout(); displayChoices->setSpacing(16);
+    auto *resolutionColumn = new QVBoxLayout(); resolutionColumn->setSpacing(8);
+    resolutionColumn->addWidget(new QLabel("Resolution", display)); resolutionColumn->addWidget(resolution_);
+    auto *fpsColumn = new QVBoxLayout(); fpsColumn->setSpacing(8);
+    fpsColumn->addWidget(new QLabel("Frame rate", display)); fpsColumn->addWidget(fps_);
+    displayChoices->addLayout(resolutionColumn, 2); displayChoices->addLayout(fpsColumn, 1);
+    displayForm->addLayout(displayChoices); displayForm->addWidget(custom);
+    auto *hint = new QLabel("Higher resolutions and 60 fps need more processing power. Applying changes reconnects CarPlay.", display);
+    hint->setWordWrap(true); hint->setProperty("secondary", true); displayForm->addWidget(hint); displayForm->addStretch();
+    auto *apply = button("Apply && reconnect", "applyDisplay", display); displayForm->addWidget(apply);
     connect(apply, &QPushButton::clicked, this, [this] {
         if ((width_->value() % 2) || (height_->value() % 2)) {
             status_->setText("Use even pixel sizes, for example 1280 × 720."); return;
@@ -104,15 +144,16 @@ void CarPlayWidget::init() {
         if (process_.state() != QProcess::NotRunning) connectSelectedPhone();
         else status_->setText("Display settings saved. Connect an iPhone to use them.");
     });
-    settingsLayout->addWidget(display);
+    apply->setProperty("primary", true); addSection(display);
 
-    auto *advancedToggle = new QToolButton(settings_); advancedToggle->setText("Advanced setup");
-    advancedToggle->setCheckable(true); advancedToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); advancedToggle->setArrowType(Qt::RightArrow);
-    settingsLayout->addWidget(advancedToggle);
-    auto *advanced = new QWidget(settings_); advanced->setVisible(false); auto *form = new QFormLayout(advanced);
-    ssid_ = new QLineEdit(saved.value("CarPlay/ssid", qEnvironmentVariable("CARPLAY_WIFI_SSID")).toString(), advanced);
-    password_ = new QLineEdit(qEnvironmentVariable("CARPLAY_WIFI_PASSPHRASE"), advanced); password_->setEchoMode(QLineEdit::Password);
-    identity_ = new QLineEdit(saved.value("CarPlay/identity_directory", QString(DASH_CARPLAY_IDENTITY_DIR)).toString(), advanced);
+    auto *advanced = new QWidget(sections); auto *form = new QFormLayout(advanced);
+    form->setContentsMargins(0,4,0,4); form->setSpacing(12); form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+    auto *setupHint = new QLabel("Connection details are already configured on this Pi. Change them only when using another Wi-Fi network or receiver installation.", advanced);
+    setupHint->setWordWrap(true); setupHint->setProperty("secondary", true); form->addRow(setupHint);
+    ssid_ = new CarPlayTouchEdit(saved.value("CarPlay/ssid", qEnvironmentVariable("CARPLAY_WIFI_SSID")).toString(), "Wi-Fi network", advanced);
+    ssid_->setMaxLength(32);
+    password_ = new CarPlayTouchEdit(qEnvironmentVariable("CARPLAY_WIFI_PASSPHRASE"), "Wi-Fi password", advanced); password_->setEchoMode(QLineEdit::Password);
+    identity_ = new CarPlayTouchEdit(saved.value("CarPlay/identity_directory", QString(DASH_CARPLAY_IDENTITY_DIR)).toString(), "Identity folder", advanced);
     auto *identityRow = new QWidget(advanced); auto *identityLayout = new QHBoxLayout(identityRow); identityLayout->setContentsMargins(0,0,0,0);
     identityLayout->addWidget(identity_); auto *browse = button("Choose folder", "chooseIdentity", identityRow); identityLayout->addWidget(browse);
     connect(browse, &QPushButton::clicked, this, [this] {
@@ -120,16 +161,13 @@ void CarPlayWidget::init() {
         if (!folder.isEmpty()) identity_->setText(folder);
     });
     form->addRow("Wi-Fi network", ssid_); form->addRow("Wi-Fi password", password_); form->addRow("Identity folder", identityRow);
-    settingsLayout->addWidget(advanced);
-    connect(advancedToggle, &QToolButton::toggled, advanced, &QWidget::setVisible);
-    connect(advancedToggle, &QToolButton::toggled, this, [advancedToggle](bool open) { advancedToggle->setArrowType(open ? Qt::DownArrow : Qt::RightArrow); });
-    body->addWidget(settings_);
+    addSection(advanced);
 
     auto *controls = new QHBoxLayout();
     start_ = button("Connect", "connectCarPlay", content); stop_ = button("Disconnect", "stopCarPlay", content);
-    resume_ = button("Return to CarPlay", "resumeCarPlay", content); resume_->setVisible(false); stop_->setEnabled(false);
-    controls->addWidget(start_); controls->addWidget(stop_); controls->addWidget(resume_); phoneLayout->addLayout(controls); body->addStretch();
-    scroll->setWidget(content); setup_ = scroll; pages_->addWidget(setup_);
+    stop_->setEnabled(false); start_->setProperty("primary", true);
+    controls->addWidget(start_, 1); controls->addWidget(stop_, 1); phoneLayout->addLayout(controls);
+    pages_->addWidget(setup_); CarPlayTouch::theme(setup_, true);
     surface_ = new CarPlaySurface(*client_, pages_); surface_->setObjectName("carplayProjection"); pages_->addWidget(surface_);
     connect(resume_, &QPushButton::clicked, this, [this] {
         managing_ = false;
@@ -154,13 +192,14 @@ void CarPlayWidget::init() {
     });
     connect(rename, &QPushButton::clicked, this, [this] {
         if (phones_->currentIndex() < 0) return;
-        bool ok = false;
-        const auto name = QInputDialog::getText(this, "Phone name", "Name", QLineEdit::Normal, phones_->currentText(), &ok).trimmed();
-        if (ok && !name.isEmpty()) { phones_->setItemText(phones_->currentIndex(), name.left(80)); savePhones(); }
+        auto name = phones_->currentText();
+        if (CarPlayTouch::editText(this, "Phone name", name, false, 80) && !name.trimmed().isEmpty()) {
+            phones_->setItemText(phones_->currentIndex(), name.trimmed()); savePhones();
+        }
     });
     connect(remove, &QPushButton::clicked, this, [this] {
         if (phones_->currentIndex() < 0) return;
-        if (QMessageBox::question(this, "Remove saved iPhone", "Remove " + phones_->currentText() + " from Dash? Bluetooth pairing on the Pi is kept.") != QMessageBox::Yes) return;
+        if (!CarPlayTouch::confirm(this, "Remove saved iPhone?", "Remove " + phones_->currentText() + " from Dash? You can add it again without pairing.", "Remove iPhone")) return;
         restartPending_ = false; stopReceiver(); phones_->removeItem(phones_->currentIndex()); savePhones();
     });
     connect(start_, &QPushButton::clicked, this, &CarPlayWidget::connectSelectedPhone);
@@ -171,14 +210,14 @@ void CarPlayWidget::init() {
     connect(&process_, &QProcess::started, this, [this] { start_->setEnabled(true); });
     connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            restartPending_ = false; status_->setText("CarPlay could not start. Check Advanced setup or the receiver installation.");
+            restartPending_ = false; status_->setText("CarPlay could not start. Check Setup or the receiver installation.");
             start_->setEnabled(true); stop_->setEnabled(false); poll_.stop();
         }
     });
     connect(&process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int code, QProcess::ExitStatus) {
         poll_.stop(); client_->disconnectReceiver(); start_->setEnabled(true); stop_->setEnabled(false);
         if (restartPending_) { restartPending_ = false; QTimer::singleShot(0, this, &CarPlayWidget::startReceiver); }
-        else status_->setText(code == 0 ? "CarPlay disconnected. Choose an iPhone to reconnect." : "CarPlay receiver stopped. Try connecting again; Advanced setup has the receiver details.");
+        else status_->setText(code == 0 ? "CarPlay disconnected. Choose an iPhone to reconnect." : "CarPlay receiver stopped. Try connecting again; Setup has the receiver details.");
     });
     poll_.setInterval(500);
     connect(&poll_, &QTimer::timeout, this, [this] { client_->connectFile(stateDirectory_ + "/connection.json"); });
@@ -187,6 +226,10 @@ void CarPlayWidget::init() {
 }
 
 void CarPlayWidget::showSetup() { managing_ = true; pages_->setCurrentWidget(setup_); }
+
+void CarPlayWidget::setNightMode(bool night) {
+    client_->setNightMode(night); setProperty("carplayDark", night); CarPlayTouch::theme(setup_, night);
+}
 
 void CarPlayWidget::addPhone(const QString &name, const QString &address) {
     const auto normalized = address.toUpper(); if (!validAddress(normalized)) return;

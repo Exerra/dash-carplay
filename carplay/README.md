@@ -59,7 +59,7 @@ python3 carplay/preflight.py --identity-dir /absolute/path/to/runtime-assets
 ```
 
 5. For a new installation, enter the identity folder and shared Wi-Fi details in
-   **Advanced setup**. The configured development Pi already has these.
+   **Setup**. The configured development Pi already has these.
 6. **Add iPhone** guides you through pairing, Wi-Fi and CarPlay approval. Keep the
    iPhone's Bluetooth settings open and confirm the matching code when prompted;
    no Bluetooth address needs to be typed. Select a saved phone and choose **Connect**.
@@ -74,7 +74,13 @@ The **OpenDash** icon on the CarPlay home screen also opens this management scre
 using CarPlay's OEM return action. Its icon reuses Dash's existing logo. This does
 not require installing an iPhone app.
 
-- Save several named iPhones, rename or remove them, and choose which phone to
+Management has separate **Phones**, **Display** and **Setup** screens, with large
+touch targets and swipe scrolling. Tap a selector to open a large list; tap a name
+or Wi-Fi field for the on-screen keyboard. Custom dimensions use a number pad
+that accepts only valid even pixel sizes. The layout supports 800×480 screens and
+centers the controls on larger displays. Both light and dark Dash themes apply.
+
+- Save several named iPhones, rename or remove them under **Phone options**, and choose which phone to
   connect. One phone is active at a time. Removing a saved entry keeps its system
   Bluetooth pairing; the wizard can add it again.
 - Choose 800×480, 1024×600, 1280×720, 1920×1080, 1920×720, or a custom even size
@@ -86,7 +92,7 @@ not require installing an iPhone app.
 Phone names, selection and display settings persist in Dash settings. The setup
 wizard performs pairing on the Pi through BlueZ and shows confirmation inside
 Dash; ordinary connection screens do not expose Bluetooth addresses or identity
-paths. Those technical settings remain under **Advanced setup**.
+paths. Those technical settings remain under **Setup**.
 
 The native page does not save the Wi-Fi password in Dash settings; it passes it to
 the backend's environment for that run. Pairing and generated receiver state live

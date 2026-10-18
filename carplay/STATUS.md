@@ -32,6 +32,9 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   phones support selection, renaming and removal; one connects at a time.
 - Resolution presets, custom even sizes and 30/60 fps persist in Dash settings.
   Apply & reconnect restarts the receiver with those exact display parameters.
+- Touch management separates Phones, Display and Setup. Large selectors, an
+  on-screen keyboard, validated resolution number pad and swipe scrolling work
+  in both themes; controls center on larger displays.
 - Android Auto priority guard (block CarPlay start while AA is active; stop the
   CarPlay receiver if AA connects).
 - Linux BlueZ iAP2 bridge, adapter/device selection and orderly process shutdown.
@@ -55,6 +58,8 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 | Connected-view transitions and returning from management | Passed |
 | Two saved phones, selection persistence and display parameters sent to receiver | Passed |
 | Wizard steps, duplicate discoveries and pairing-agent phone scoping | Passed |
+| Touch selector, keyboard accept/cancel and resolution keypad validation | Passed |
+| Rendered management, wizard and keyboards at 800×480 in both themes | Inspected |
 | Bundled OEM PNG and its /info advertisement | Passed |
 | Real backend startup/status/private-IPC/MFi-SAP response smoke test | Passed |
 | macOS Bluetooth helper | Compiled; no pairing attempted |
@@ -71,6 +76,8 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
 
 ## Verified on the Pi
 
+- The touch redesign was built and installed, native interaction and shutdown
+  checks passed, and the user confirmed the new controls look good and work.
 - The updated connected view was captured on the Pi with setup fully hidden, and
   the user confirmed management and returning to CarPlay work. A direct test of
   the wizard's real Bluetooth controller found the existing paired iPhone. A
@@ -174,6 +181,8 @@ Identity files and the private environment remain at their existing runtime path
 Use the `OpenDash-CarPlay` desktop shortcut to reopen this development setup.
 The subsequent wizard, display settings and confirmed in-CarPlay return icon build
 is saved separately at `/home/pi/dash-backups/carplay-ui-2026-10-18-bO7Yoq`.
+The touch redesign executable, configuration and UI sources are saved at
+`/home/pi/dash-backups/carplay-touch-ui-2026-10-18-fq3wLO` with SHA-256 checksums.
 
 See `README.md` for build/run instructions. No credentials are committed or bundled
 in the receiver source; the extracted identity remains in the workspace's external

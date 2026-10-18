@@ -3,6 +3,9 @@
 #include "carplay/widget.hpp"
 #include "carplay/pairing_agent.hpp"
 #include "carplay/phone_wizard.hpp"
+#include "carplay/touch_ui.hpp"
+#include <QDialog>
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -127,6 +130,104 @@ class CarPlayNativeTest : public QObject {
         QCOMPARE(wizard.phoneAddress(), QString("00:11:22:33:44:55"));
         wizard.reject();
         QVERIFY(!QSettings().contains("CarPlay/wifi_password"));
+    }
+
+    void touchSelectorsAndKeyboardKeepEditsUntilConfirmed() {
+        QWidget parent; parent.resize(800, 480); parent.show();
+        CarPlayTouchChoice choice("Choose an iPhone", &parent);
+        choice.addItems({"Alice", "Bob"});
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            auto *list = dialog->findChild<QListWidget *>("touchChoices");
+            QTest::mouseClick(list->viewport(), Qt::LeftButton, Qt::NoModifier, list->visualItemRect(list->item(1)).center());
+        });
+        choice.showPopup(); QCOMPARE(choice.currentText(), QString("Bob"));
+        QString value = "Original";
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            dialog->findChild<QLineEdit *>("keyboardValue")->setText("Discard this");
+            dialog->findChild<QPushButton *>("cancelKeyboard")->click();
+        });
+        QVERIFY(!CarPlayTouch::editText(&parent, "Phone name", value));
+        QCOMPARE(value, QString("Original"));
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            dialog->findChild<QPushButton *>("keyboardShift")->click();
+            for (auto *key : dialog->findChildren<QPushButton *>("keyboardKey"))
+                if (key->property("character") == "A") key->click();
+            dialog->findChild<QPushButton *>("keyboardMode")->click();
+            for (auto *key : dialog->findChildren<QPushButton *>("keyboardKey"))
+                if (key->property("character") == "&") key->click();
+            dialog->findChild<QPushButton *>("saveKeyboard")->click();
+        });
+        QVERIFY(CarPlayTouch::editText(&parent, "Phone name", value));
+        QCOMPARE(value, QString("A&"));
+    }
+
+    void numberPadRejectsOddAndOutOfRangeResolutions() {
+        QWidget parent; parent.resize(800, 480); parent.show();
+        CarPlayTouchNumber number(&parent); number.setRange(480, 3840); number.setValue(800);
+        bool rejectsOdd = false, rejectsSmall = false, acceptsEven = false;
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            auto *save = dialog->findChild<QPushButton *>("saveNumber");
+            auto enter = [&](const QString &digits) {
+                const auto keys = dialog->findChildren<QPushButton *>("numberKey");
+                for (auto *key : keys) if (key->text() == "Clear") key->click();
+                for (auto digit : digits) for (auto *key : keys) if (key->text() == QString(digit)) key->click();
+            };
+            enter("1279"); rejectsOdd = !save->isEnabled();
+            enter("12"); rejectsSmall = !save->isEnabled();
+            enter("1280"); acceptsEven = save->isEnabled();
+            if (acceptsEven) save->click(); else dialog->reject();
+        });
+        QTest::mouseClick(number.findChild<QLineEdit *>(), Qt::LeftButton);
+        QVERIFY(rejectsOdd); QVERIFY(rejectsSmall); QVERIFY(acceptsEven);
+        QCOMPARE(number.value(), 1280);
+    }
+
+    void exportTouchPreviewsWhenRequested() {
+        const auto directory = qEnvironmentVariable("CARPLAY_UI_PREVIEW_DIR");
+        if (directory.isEmpty()) QSKIP("Set CARPLAY_UI_PREVIEW_DIR to export UI screenshots");
+        QDir().mkpath(directory);
+        CarPlayWidget widget; widget.resize(800,480); widget.show();
+        auto *phones = widget.findChild<QComboBox *>("savedPhones"); phones->setItemText(0, "Sithis");
+        auto capture = [&](QWidget *view, const QString &name) { QTest::qWait(30); view->grab().save(directory + "/" + name + ".png"); };
+        capture(&widget, "phones-800");
+        for (auto *tab : widget.findChildren<QPushButton *>("carplaySection")) {
+            if (tab->text() == "Phones") continue;
+            tab->click(); capture(&widget, tab->text().toLower() + "-800");
+        }
+        auto selectSection = [&](const QString &title) {
+            for (auto *tab : widget.findChildren<QPushButton *>("carplaySection")) if (tab->text() == title) tab->click();
+        };
+        selectSection("Display");
+        auto *resolution = widget.findChild<QComboBox *>("resolutionPreset"); resolution->setCurrentIndex(resolution->count()-1);
+        capture(&widget, "display-custom-800");
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            capture(dialog, "keyboard-800"); dialog->reject();
+        });
+        QString value = "My iPhone"; CarPlayTouch::editText(&widget, "Phone name", value);
+        QTimer::singleShot(0, [&] {
+            auto *dialog = qobject_cast<QDialog *>(QApplication::activeModalWidget());
+            capture(dialog, "number-800"); dialog->reject();
+        });
+        QTest::mouseClick(widget.findChild<QSpinBox *>("carplayWidth")->findChild<QLineEdit *>(), Qt::LeftButton);
+        auto *bluetooth = new CarPlayPhones(nullptr, false);
+        CarPlayPhoneWizard wizard("OpenDash-CarPlay", "example-password", &widget, bluetooth);
+        wizard.resize(760,440); wizard.show();
+        emit bluetooth->found("Sithis", "00:11:22:33:44:55", true);
+        wizard.findChild<QListWidget *>("discoveredPhones")->setCurrentRow(0);
+        capture(&wizard, "wizard-phone-800"); wizard.next(); capture(&wizard, "wizard-wifi-800");
+        wizard.next(); capture(&wizard, "wizard-finish-800"); wizard.reject();
+        selectSection("Setup");
+        widget.setNightMode(false); capture(&widget, "setup-light-800");
+        widget.resize(1920,1080); selectSection("Phones"); capture(&widget, "phones-1920");
     }
 
     void decodesVideoAndMapsTouchInsideLetterboxing() {

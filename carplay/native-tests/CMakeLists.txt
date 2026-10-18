@@ -12,12 +12,14 @@ add_executable(carplay-native-test
     ${DASH_ROOT}/src/carplay/client.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
     ${DASH_ROOT}/src/carplay/widget.cpp
+    ${DASH_ROOT}/src/carplay/touch_ui.cpp
     ${DASH_ROOT}/src/carplay/phones.cpp
     ${DASH_ROOT}/src/carplay/phone_wizard.cpp
     ${DASH_ROOT}/src/carplay/pairing_agent.cpp
     ${DASH_ROOT}/include/carplay/client.hpp
     ${DASH_ROOT}/include/carplay/surface.hpp
     ${DASH_ROOT}/include/carplay/widget.hpp
+    ${DASH_ROOT}/include/carplay/touch_ui.hpp
     ${DASH_ROOT}/include/carplay/phones.hpp
     ${DASH_ROOT}/include/carplay/pairing_agent.hpp
     ${DASH_ROOT}/include/carplay/phone_wizard.hpp)
