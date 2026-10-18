@@ -101,6 +101,7 @@ class Session {
         Page *next_enabled_page(Page *page) const;
 
         const QList<Page *> &pages() const { return this->pages_; }
+        QList<Page *> ordered_pages() const;
         Page *page(int id) const { return this->pages_.value(id, nullptr); }
         int page_id(Page *page) const { return this->pages_.indexOf(page); }
 

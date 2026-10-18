@@ -66,6 +66,10 @@ python3 carplay/preflight.py --identity-dir /absolute/path/to/runtime-assets
 
 ## Phones and display
 
+CarPlay appears first in the sidebar and Layout settings, with its own CarPlay
+icon. When enabled, it is also the initial page. Saved page IDs, enabled states
+and keybindings stay unchanged; page cycling follows the visible sidebar order.
+
 Once the first video frame arrives, the setup screen disappears and CarPlay fills
 the page, like Android Auto. Disconnecting returns to the setup screen.
 While connected, use **Settings → CarPlay → Phones & display** to manage the

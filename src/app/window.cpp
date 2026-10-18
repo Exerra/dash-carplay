@@ -77,7 +77,7 @@ void Dash::init()
 {
     this->body.status_bar->addWidget(this->status_bar());
 
-    for (auto page : this->arbiter.layout().pages()) {
+    for (auto page : this->arbiter.layout().ordered_pages()) {
         auto button = page->button();
         button->setCheckable(true);
         button->setFlat(true);
@@ -87,9 +87,12 @@ void Dash::init()
         this->rail.group.addButton(button, this->arbiter.layout().page_id(page));
         this->rail.layout->addWidget(button);
         this->body.frame->addWidget(page->container());
+    }
 
+    // Keep connection services' initialization order independent of visual order.
+    for (auto page : this->arbiter.layout().pages()) {
         page->init();
-        button->setVisible(page->enabled());
+        page->button()->setVisible(page->enabled());
     }
     this->set_page(this->arbiter.layout().curr_page);
 

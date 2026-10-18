@@ -147,7 +147,7 @@ Session::Layout::Layout(QSettings &settings, Arbiter &arbiter)
     settings.endGroup();
     settings.endGroup();
 
-    for (auto page : this->pages_) {
+    for (auto page : this->ordered_pages()) {
         if (page->enabled()) {
             this->curr_page = page;
             break;
@@ -155,14 +155,30 @@ Session::Layout::Layout(QSettings &settings, Arbiter &arbiter)
     }
 }
 
+QList<Page *> Session::Layout::ordered_pages() const
+{
+    auto pages = this->pages_;
+#ifdef DASH_CARPLAY
+    // Visual order is independent of saved page IDs and action IDs.
+    for (int i = 0; i < pages.size(); ++i) {
+        if (dynamic_cast<CarPlayPage *>(pages[i])) {
+            pages.move(i, 0);
+            break;
+        }
+    }
+#endif
+    return pages;
+}
+
 Page *Session::Layout::next_enabled_page(Page *page) const
 {
-    auto id = this->page_id(page);
+    const auto pages = this->ordered_pages();
+    auto id = pages.indexOf(page);
     do {
-        id = (id + 1) % this->pages_.size();
-    } while (!this->page(id)->enabled());
+        id = (id + 1) % pages.size();
+    } while (!pages[id]->enabled());
 
-    return this->page(id);
+    return pages[id];
 }
 
 const char *Session::System::VOLUME_CMD = "amixer set Master %1% --quiet";

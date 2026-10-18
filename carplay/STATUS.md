@@ -24,6 +24,9 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 - Projection fills the page after the first decoded frame; setup returns on
   disconnect. Settings → CarPlay → Phones & display opens management without
   ending a session, with a Return to CarPlay action.
+- CarPlay uses its C/play sidebar icon and appears first in navigation and Layout
+  settings. Startup and page cycling follow this order; saved numeric page/action
+  IDs and connection service initialization order remain unchanged.
 - The OpenDash OEM icon is advertised on the CarPlay home screen; the phone's
   requestUI callback opens native management. Return to CarPlay requests showUI
   and a fresh frame while keeping the phone session alive.
@@ -82,6 +85,9 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
 
 ## Verified on the Pi
 
+- The CarPlay sidebar icon and first-page order were built and visually checked
+  on the Pi. Dash opened directly into the reconnected CarPlay session, with the
+  new icon first in the sidebar; the persistent page registry is unchanged.
 - Shared Phone controls compiled in the full Dash application; native routing,
   control IPC, input lifecycle and configuration teardown checks passed. The
   receiver suite passed 95 protocol tests and 26 server tests; one external MFi

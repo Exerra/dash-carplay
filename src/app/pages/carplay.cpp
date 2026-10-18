@@ -5,7 +5,7 @@
 #include <QVBoxLayout>
 
 CarPlayPage::CarPlayPage(Arbiter &arbiter, QWidget *parent)
-    : QWidget(parent), Page(arbiter, "CarPlay", "directions_car", true, this) { }
+    : QWidget(parent), Page(arbiter, "CarPlay", "carplay", true, this) { }
 
 void CarPlayPage::init() {
     auto *layout = new QVBoxLayout(this);

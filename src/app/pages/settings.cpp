@@ -3,6 +3,7 @@
 #include <QLabel>
 #include <QLayoutItem>
 #include <QScrollArea>
+#include <QSignalBlocker>
 
 #include <aasdk_proto/ButtonCodeEnum.pb.h>
 #include <aasdk_proto/VideoFPSEnum.pb.h>
@@ -326,21 +327,21 @@ QWidget *LayoutSettingsTab::pages_widget()
     QGroupBox *group = new QGroupBox(widget);
     QVBoxLayout *group_layout = new QVBoxLayout(group);
 
-    for (auto page : this->arbiter.layout().pages()) {
+    for (auto page : this->arbiter.layout().ordered_pages()) {
         if (page->toggleale()) {
             QCheckBox *button = new QCheckBox(page->name(), group);
             button->setChecked(page->enabled());
             connect(button, &QCheckBox::toggled, [this, page](bool checked){
                 this->arbiter.set_page(page, checked);
             });
+            connect(&this->arbiter, &Arbiter::page_changed, button, [page, button](Page *changed, bool enabled){
+                if (changed != page) return;
+                const QSignalBlocker blocked(button);
+                button->setChecked(enabled);
+            });
             group_layout->addWidget(button);
         }
     }
-    connect(&this->arbiter, &Arbiter::page_changed, [this, group_layout](Page *page, bool enabled){
-        auto item = group_layout->itemAt(this->arbiter.layout().page_id(page));
-        if (auto button = qobject_cast<QCheckBox *>(item->widget()))
-            button->setChecked(enabled);
-    });
 
     layout->addWidget(group, 1, Qt::AlignHCenter);
 
