@@ -13,6 +13,7 @@ add_executable(carplay-native-test
     ${DASH_ROOT}/src/app/receiver_settings.cpp
     ${DASH_ROOT}/include/app/receiver_settings.hpp
     ${DASH_ROOT}/src/carplay/client.cpp
+    ${DASH_ROOT}/src/carplay/video_frame.cpp
     ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
     ${DASH_ROOT}/src/carplay/widget.cpp
@@ -33,6 +34,14 @@ target_compile_definitions(carplay-native-test PRIVATE DASH_CARPLAY
 target_include_directories(carplay-native-test PRIVATE ${DASH_ROOT}/include)
 target_link_libraries(carplay-native-test PRIVATE Qt5::Widgets Qt5::WebSockets Qt5::Bluetooth Qt5::DBus Qt5::Test PkgConfig::GST)
 add_test(NAME carplay-native COMMAND carplay-native-test)
+add_executable(carplay-media-benchmark media_benchmark.cpp
+    ${DASH_ROOT}/src/carplay/client.cpp ${DASH_ROOT}/src/carplay/controls.cpp
+    ${DASH_ROOT}/src/carplay/video_frame.cpp
+    ${DASH_ROOT}/src/carplay/surface.cpp ${DASH_ROOT}/src/app/phone_controls.cpp
+    ${DASH_ROOT}/include/carplay/client.hpp ${DASH_ROOT}/include/carplay/surface.hpp)
+target_compile_definitions(carplay-media-benchmark PRIVATE DASH_CARPLAY)
+target_include_directories(carplay-media-benchmark PRIVATE ${DASH_ROOT}/include)
+target_link_libraries(carplay-media-benchmark PRIVATE Qt5::Widgets Qt5::WebSockets PkgConfig::GST)
 set(CARPLAY_TEST_ENV "QT_QPA_PLATFORM=offscreen")
 if(APPLE)
     # Homebrew bundles many unrelated hardware/Python plugins. Test only the real

@@ -2,6 +2,7 @@
 
 #ifdef DASH_CARPLAY
 #include "app/phone_controls.hpp"
+#include "carplay/video_frame.hpp"
 #include <QImage>
 #include <QElapsedTimer>
 #include <QJsonObject>
@@ -29,6 +30,7 @@ class CarPlayClient : public QObject {
     void setNightMode(bool night);
     void setVolume(int percent);
     QImage frame() const;
+    std::shared_ptr<const CarPlayVideoFrame> videoFrame() const;
 
  signals:
     void statusChanged(const QString &message);
@@ -50,7 +52,7 @@ class CarPlayClient : public QObject {
     QElapsedTimer videoStats_;
     QMap<int, AudioPipeline> audio_;
     mutable QMutex frameMutex_;
-    QImage frame_;
+    std::shared_ptr<const CarPlayVideoFrame> frame_;
     bool night_ = false;
     double volume_ = 1.0;
     bool enabled_ = false;
@@ -64,7 +66,7 @@ class CarPlayClient : public QObject {
     void stopMedia();
     void stopAudio(int type);
     void checkPipelines();
-    void push(GstElement *source, const QByteArray &data, bool video = false);
+    void push(GstElement *source, const QByteArray &data, bool video = false, int offset = 0);
     static GstFlowReturn newSample(GstAppSink *sink, gpointer context);
 };
 #endif

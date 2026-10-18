@@ -38,6 +38,36 @@ class CarPlayNativeTest : public QObject {
         settings.setValue("CarPlay/bluetooth_address", "00:11:22:33:44:55");
     }
 
+    void mappedFramesKeepDecoderMemoryAliveAndConvertPaddedPlanes() {
+        gst_init(nullptr, nullptr);
+        GstVideoInfo info;
+        gst_video_info_set_format(&info, GST_VIDEO_FORMAT_I420, 162, 98);
+        info.fps_n=30; info.fps_d=1;
+        info.colorimetry.matrix=GST_VIDEO_COLOR_MATRIX_BT601;
+        info.colorimetry.range=GST_VIDEO_COLOR_RANGE_16_235;
+        auto *buffer = gst_buffer_new_allocate(nullptr, info.size, nullptr);
+        GstVideoFrame writable;
+        QVERIFY(gst_video_frame_map(&writable, &info, buffer, GST_MAP_WRITE));
+        const int values[] = {81,90,240}; // Limited-range BT.601 red, with padded rows.
+        for (int plane=0; plane<3; ++plane)
+            memset(GST_VIDEO_FRAME_PLANE_DATA(&writable, plane), values[plane],
+                GST_VIDEO_FRAME_PLANE_STRIDE(&writable, plane)*(plane ? 49 : 98));
+        gst_video_frame_unmap(&writable);
+        auto *caps = gst_video_info_to_caps(&info);
+        auto *sample = gst_sample_new(buffer, caps, nullptr, nullptr);
+        auto frame = CarPlayVideoFrame::map(sample);
+        gst_sample_unref(sample); gst_caps_unref(caps); gst_buffer_unref(buffer);
+        QVERIFY(frame); QCOMPARE(frame->size(), QSize(162,98));
+        QVERIFY(frame->stride(0) > 162);
+        const auto image = frame->image();
+        QVERIFY(!image.isNull());
+        frame.reset(); // The RGB fallback snapshot must also own its storage.
+        for (const auto &point : {QPoint(0,0), QPoint(161,97)}) {
+            const auto pixel = image.pixelColor(point);
+            QVERIFY(pixel.red() >= 245); QVERIFY(pixel.green() <= 10); QVERIFY(pixel.blue() <= 10);
+        }
+    }
+
     void androidAutoBlocksAndStopsTheReceiver() {
         const auto runner = settingsDirectory_.filePath("receiver");
         QFile executable(runner);

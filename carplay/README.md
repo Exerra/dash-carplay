@@ -102,8 +102,10 @@ The native page does not save the Wi-Fi password in Dash settings; it passes it 
 the backend's environment for that run. Pairing and generated receiver state live
 under `${XDG_STATE_HOME:-~/.local/state}/opendash/carplay`. The local connection
 token file has owner-only permissions. The frontend initially requests H.264,
-800×480 at 30 fps. Decoder output uses a bounded latest-frame Qt image; benchmark
-this copy-based renderer on the actual Pi before increasing resolution.
+800×480 at 30 fps. Decoder output retains the latest I420 buffer; OpenGL converts
+and scales it on the GPU, with a software fallback for headless/unsupported
+graphics. See [PERFORMANCE.md](PERFORMANCE.md) for the pipeline audit, measured
+before/after results, benchmark commands and thermal/measurement limits.
 
 ## Receiver switches
 

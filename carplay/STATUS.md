@@ -15,6 +15,10 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   page list. Existing numeric page and shortcut IDs are preserved.
 - Native H.264 decoding, latest-frame rendering, letterboxed touch/mouse mapping,
   two-contact touch messages, knob keys, Home, theme and volume forwarding.
+- GPU I420 colour conversion/scaling, retained decoder buffers and shared-storage
+  native packet ingestion. Software rendering remains available. The Pi's live
+  V3D path and user playback/input/return checks passed; see `PERFORMANCE.md` for
+  measured gains, the small-resolution CPU tradeoff and hardware codec limits.
 - Native AAC/Opus/PCM playback pipelines. Actual AAC-LC stereo music at 48 kHz
   was received, decrypted and played through HDMI on the Pi.
 - Silent PCM/Opus input for audio-device compatibility without capturing a
@@ -222,6 +226,8 @@ The touch redesign executable, configuration and UI sources are saved at
 `/home/pi/dash-backups/carplay-touch-ui-2026-10-18-fq3wLO` with SHA-256 checksums.
 The shared-control app, receiver and settings are saved at
 `/home/pi/dash-backups/carplay-shared-controls-2026-10-18-Xa1rzr`.
+The GPU renderer, native media sources, benchmark results and settings are saved
+at `/home/pi/dash-backups/media-optimized-2026-10-18-PTASWZ`.
 
 See `README.md` for build/run instructions. No credentials are committed or bundled
 in the receiver source; the extracted identity remains in the workspace's external

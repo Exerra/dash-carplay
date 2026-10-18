@@ -105,6 +105,11 @@ void CarPlayClient::setVolume(int percent) {
 }
 
 QImage CarPlayClient::frame() const {
+    const auto current = videoFrame();
+    return current ? current->image() : QImage();
+}
+
+std::shared_ptr<const CarPlayVideoFrame> CarPlayClient::videoFrame() const {
     QMutexLocker guard(&frameMutex_);
     return frame_;
 }
@@ -147,7 +152,8 @@ void CarPlayClient::configureVideo(const QByteArray &data) {
         // appsrc already queues input. Dropping encoded P-frames here corrupts
         // their dependants; keep them and discard only decoded display frames.
         "! h264parse config-interval=-1 ! avdec_h264 max-threads=2 thread-type=slice "
-        "! videoconvert ! video/x-raw,format=BGRx "
+        // Keep the decoder's native planes; the GPU converts and scales them.
+        "! videoconvert ! video/x-raw,format=I420 "
         "! appsink name=screen sync=false max-buffers=1 drop=true", &error);
     if (error || !video_) {
         emit statusChanged(error ? QString::fromUtf8(error->message) : "Video pipeline unavailable");
@@ -179,20 +185,14 @@ GstFlowReturn CarPlayClient::newSample(GstAppSink *sink, gpointer context) {
     auto *self = static_cast<CarPlayClient *>(context);
     GstSample *sample = gst_app_sink_pull_sample(sink);
     if (!sample) return GST_FLOW_EOS;
-    GstVideoInfo info;
-    GstVideoFrame frame;
-    if (gst_video_info_from_caps(&info, gst_sample_get_caps(sample)) &&
-        gst_video_frame_map(&frame, &info, gst_sample_get_buffer(sample), GST_MAP_READ)) {
-        QImage image(static_cast<const uchar *>(GST_VIDEO_FRAME_PLANE_DATA(&frame, 0)),
-            GST_VIDEO_INFO_WIDTH(&info), GST_VIDEO_INFO_HEIGHT(&info),
-            GST_VIDEO_FRAME_PLANE_STRIDE(&frame, 0), QImage::Format_RGB32);
+    const auto frame = CarPlayVideoFrame::map(sample);
+    if (frame) {
         {
             QMutexLocker guard(&self->frameMutex_);
-            self->frame_ = image.copy();
+            self->frame_ = frame;
         }
         ++self->videoDecoded_;
         emit self->frameChanged();
-        gst_video_frame_unmap(&frame);
     }
     gst_sample_unref(sample);
     return GST_FLOW_OK;
@@ -239,8 +239,8 @@ void CarPlayClient::configureAudio(const QByteArray &data) {
     gst_element_set_state(audio.pipeline, GST_STATE_PLAYING);
 }
 
-void CarPlayClient::push(GstElement *source, const QByteArray &data, bool video) {
-    if (!source || data.isEmpty()) return;
+void CarPlayClient::push(GstElement *source, const QByteArray &data, bool video, int offset) {
+    if (!source || offset < 0 || offset >= data.size()) return;
     if (gst_app_src_get_current_level_bytes(GST_APP_SRC(source)) > 2 * 1024 * 1024) {
         if (video) {
             // Recover at a fresh keyframe rather than continuing with missing references.
@@ -250,9 +250,13 @@ void CarPlayClient::push(GstElement *source, const QByteArray &data, bool video)
         }
         return;
     }
-    GstBuffer *buffer = gst_buffer_new_allocate(nullptr, data.size(), nullptr);
-    if (!buffer) return;
-    gst_buffer_fill(buffer, 0, data.constData(), data.size());
+    // QByteArray's shared storage outlives the WebSocket callback. GStreamer
+    // releases this reference after consuming the payload, without mid()/memcpy.
+    auto *storage = new QByteArray(data);
+    GstBuffer *buffer = gst_buffer_new_wrapped_full(GST_MEMORY_FLAG_READONLY,
+        const_cast<char *>(storage->constData()), storage->size(), offset, storage->size() - offset,
+        storage, [](gpointer value) { delete static_cast<QByteArray *>(value); });
+    if (!buffer) { delete storage; return; }
     gst_app_src_push_buffer(GST_APP_SRC(source), buffer);
 }
 
@@ -268,11 +272,11 @@ void CarPlayClient::binaryMessage(const QByteArray &data) {
                     configureVideo(videoConfig_);
                 }
                 ++videoReceived_;
-                push(videoSource_, data.mid(11), true);
+                push(videoSource_, data, true, 11);
             }
             break;
         case 3: configureAudio(data); break;
-        case 4: if (data.size() >= 10 && audio_.contains(type)) push(audio_[type].source, data.mid(10)); break;
+        case 4: if (data.size() >= 10 && audio_.contains(type)) push(audio_[type].source, data, false, 10); break;
         case 5: if (data.size() >= 3 && type == videoType_ && !data[2]) stopPipeline(video_, videoSource_); break;
         case 6: stopAudio(type); break;
         default: break;

@@ -178,7 +178,7 @@ void CarPlayWidget::init() {
     });
     connect(client_, &CarPlayClient::hostUiRequested, this, [this] { showSetup(); emit managementRequested(); });
     connect(client_, &CarPlayClient::frameChanged, this, [this] {
-        const bool ready = !client_->frame().isNull();
+        const bool ready = bool(client_->videoFrame());
         if (ready != projectionReady_) {
             projectionReady_ = ready;
             if (!ready) managing_ = false;
