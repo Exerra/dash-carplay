@@ -242,7 +242,20 @@ void CarPlayWidget::init() {
 void CarPlayWidget::showSetup() { managing_ = true; pages_->setCurrentWidget(setup_); }
 
 void CarPlayWidget::setNightMode(bool night) {
-    client_->setNightMode(night); setProperty("carplayDark", night); CarPlayTouch::theme(setup_, night);
+    client_->setNightMode(night); setProperty("carplayDark", night); updateTheme();
+}
+
+void CarPlayWidget::setAccentColor(const QColor &color) {
+    if (!color.isValid()) return;
+    setProperty("carplayAccent", color); updateTheme();
+}
+
+void CarPlayWidget::updateTheme() {
+    const bool night = CarPlayTouch::dark(this);
+    CarPlayTouch::theme(setup_, night);
+    // Dialogs have their own stylesheet. Keep an open wizard, picker or keyboard
+    // in sync as well as the management page; new dialogs inherit this accent.
+    for (auto *dialog : findChildren<QDialog *>()) CarPlayTouch::theme(dialog, night);
 }
 
 void CarPlayWidget::addPhone(const QString &name, const QString &address) {

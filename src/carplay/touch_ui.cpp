@@ -12,6 +12,7 @@
 #include <QScroller>
 #include <QScrollerProperties>
 #include <QVBoxLayout>
+#include <cmath>
 
 namespace {
 void sizeDialog(QDialog &dialog, QWidget *parent, int preferredHeight) {
@@ -23,12 +24,31 @@ void sizeDialog(QDialog &dialog, QWidget *parent, int preferredHeight) {
 QLabel *titleLabel(const QString &text, QWidget *parent) {
     auto *title = new QLabel(text, parent); title->setObjectName("touchTitle"); title->setWordWrap(true); return title;
 }
+QColor accentText(const QColor &color) {
+    // Compare WCAG contrast against black and white so arbitrary user accents
+    // remain readable, including very light colours and saturated blue.
+    auto linear = [](double channel) {
+        return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
+    };
+    const double luminance = 0.2126 * linear(color.redF()) + 0.7152 * linear(color.greenF()) + 0.0722 * linear(color.blueF());
+    return (luminance + 0.05) / 0.05 >= 1.05 / (luminance + 0.05) ? QColor(Qt::black) : QColor(Qt::white);
+}
 }
 
 bool CarPlayTouch::dark(const QWidget *widget) {
     for (auto *current = widget; current; current = current->parentWidget())
         if (current->property("carplayDark").isValid()) return current->property("carplayDark").toBool();
     return true;
+}
+
+QColor CarPlayTouch::accent(const QWidget *widget) {
+    for (auto *current = widget; current; current = current->parentWidget()) {
+        const auto color = current->property("carplayAccent").value<QColor>();
+        if (color.isValid()) return color;
+    }
+    // Dash stores its current accent in Base; standalone dialogs use that same
+    // palette role until their host explicitly supplies an accent.
+    return (widget ? widget->palette() : QApplication::palette()).color(QPalette::Base);
 }
 
 void CarPlayTouch::theme(QWidget *widget, bool night) {
@@ -38,6 +58,16 @@ void CarPlayTouch::theme(QWidget *widget, bool night) {
     const QString border = night ? "#383d43" : "#d2d6dc";
     const QString text = night ? "#f3f4f6" : "#1b2027";
     const QString muted = night ? "#aab2bd" : "#586373";
+    const auto color = accent(widget);
+    const auto foreground = accentText(color);
+    const auto pressed = QColor::fromRgbF(
+        color.redF() * 0.88 + foreground.redF() * 0.12,
+        color.greenF() * 0.88 + foreground.greenF() * 0.12,
+        color.blueF() * 0.88 + foreground.blueF() * 0.12);
+    auto palette = widget->palette();
+    palette.setColor(QPalette::Highlight, color);
+    palette.setColor(QPalette::HighlightedText, foreground);
+    widget->setPalette(palette);
     widget->setStyleSheet(QString(
         "QWidget { color:%1; font-size:18px; }"
         "QDialog, QWizard, QWizardPage, QWidget#carplayManagement { background:%2; }"
@@ -47,24 +77,26 @@ void CarPlayTouch::theme(QWidget *widget, bool night) {
         "QPushButton, QToolButton { background:%3; border:1px solid %4; border-radius:10px; padding:8px 16px; }"
         "QPushButton:pressed, QToolButton:pressed { background:%4; }"
         "QPushButton:disabled { color:%5; background:%2; }"
-        "QPushButton[primary=true] { background:#f5a000; color:#171717; border-color:#f5a000; font-weight:600; }"
-        "QPushButton[primary=true]:pressed { background:#ce8500; }"
+        "QPushButton:focus, QToolButton:focus { border:2px solid %7; }"
+        "QPushButton[primary=true] { background:%7; color:%8; border-color:%7; font-weight:600; }"
+        "QPushButton[primary=true]:pressed { background:%9; }"
         "QPushButton[primary=true]:disabled { background:%4; border-color:%4; color:%5; }"
         "QPushButton[navigation=true] { background:transparent; border:0; color:%5; }"
-        "QPushButton[navigation=true]:checked { background:%3; color:#ef9c00; border:1px solid %4; }"
+        "QPushButton[navigation=true]:checked { background:%7; color:%8; border:1px solid %7; }"
         "QPushButton[danger=true] { color:%6; }"
         "QLineEdit, QComboBox, QSpinBox { background:%3; color:%1; border:1px solid %4; border-radius:10px; padding:8px 14px; }"
-        "QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border:2px solid #ef9c00; }"
+        "QLineEdit, QSpinBox { selection-background-color:%7; selection-color:%8; }"
+        "QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border:2px solid %7; }"
         "QComboBox::drop-down { width:42px; border:0; }"
         "QListWidget { background:transparent; border:0; outline:0; }"
         "QListWidget::item { background:%3; border:1px solid %4; border-radius:10px; padding:10px 16px; margin:4px 0; }"
-        "QListWidget::item:selected { border:2px solid #ef9c00; color:%1; }"
+        "QListWidget::item:selected { background:%7; border:2px solid %7; color:%8; }"
         "QScrollArea { border:0; background:transparent; } QScrollArea > QWidget > QWidget { background:transparent; }"
         "QScrollBar:vertical { background:transparent; width:14px; margin:0; }"
         "QScrollBar::handle:vertical { background:%4; min-height:50px; border-radius:7px; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
         "QCheckBox { spacing:14px; padding:10px 0; } QCheckBox::indicator { width:28px; height:28px; }"
-    ).arg(text, background, panel, border, muted, night ? "#edaaa2" : "#ac3028"));
+    ).arg(text, background, panel, border, muted, night ? "#edaaa2" : "#ac3028", color.name(), foreground.name(), pressed.name()));
 }
 
 void CarPlayTouch::scroll(QWidget *viewport) {

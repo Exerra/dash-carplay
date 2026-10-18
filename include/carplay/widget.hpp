@@ -17,6 +17,7 @@ class CarPlayWidget : public QWidget {
     ~CarPlayWidget() override;
     void setAndroidAutoActive(bool active);
     void setNightMode(bool night);
+    void setAccentColor(const QColor &color);
     void setVolume(int percent) { client_->setVolume(percent); }
     void showSetup();
     void setReceiverEnabled(bool enabled);
@@ -34,6 +35,7 @@ class CarPlayWidget : public QWidget {
     bool projectionReady_ = false;
     bool managing_ = false;
     void init();
+    void updateTheme();
     CarPlayClient *client_ = nullptr;
     QProcess process_;
     QTimer poll_;

@@ -16,12 +16,14 @@ void CarPlayPage::init() {
     connect(&arbiter, &Arbiter::mode_changed, widget, [widget](Session::Theme::Mode mode) {
         widget->setNightMode(mode == Session::Theme::Dark);
     });
+    connect(&arbiter, &Arbiter::color_changed, widget, &CarPlayWidget::setAccentColor);
     connect(&arbiter, &Arbiter::volume_changed, widget, &CarPlayWidget::setVolume);
     connect(arbiter.layout().openauto_page, &QStackedWidget::currentChanged, widget, [widget](int index) {
         widget->setAndroidAutoActive(index == 1);
     });
     widget->setAndroidAutoActive(arbiter.layout().openauto_page->currentIndex() == 1);
     widget->setNightMode(arbiter.theme().mode == Session::Theme::Dark);
+    widget->setAccentColor(arbiter.theme().color());
     widget->setVolume(arbiter.system().volume);
 }
 

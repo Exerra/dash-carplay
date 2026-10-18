@@ -7,6 +7,7 @@
 
 namespace CarPlayTouch {
 bool dark(const QWidget *widget);
+QColor accent(const QWidget *widget);
 void theme(QWidget *widget, bool dark);
 void scroll(QWidget *viewport);
 QPushButton *button(const QString &text, const char *name, QWidget *parent, bool primary = false);

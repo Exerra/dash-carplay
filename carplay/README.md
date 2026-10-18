@@ -83,6 +83,10 @@ touch targets and swipe scrolling. Tap a selector to open a large list; tap a na
 or Wi-Fi field for the on-screen keyboard. Custom dimensions use a number pad
 that accepts only valid even pixel sizes. The layout supports 800×480 screens and
 centers the controls on larger displays. Both light and dark Dash themes apply.
+Buttons, selected tabs and phones, focus borders and keyboard selections use
+Dash's configured accent colour. Changes apply immediately, including to an open
+wizard or dialog; text on accent backgrounds switches between black and white
+for contrast.
 
 - Save several named iPhones, rename or remove them under **Phone options**, and choose which phone to
   connect. One phone is active at a time. Removing a saved entry keeps its system
