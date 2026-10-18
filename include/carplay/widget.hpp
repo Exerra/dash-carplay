@@ -19,6 +19,10 @@ class CarPlayWidget : public QWidget {
     void setNightMode(bool night);
     void setVolume(int percent) { client_->setVolume(percent); }
     void showSetup();
+    bool phoneActive() const { return !androidAutoActive_ && client_->sessionActive(); }
+    void sendControl(PhoneControls::Command command, PhoneControls::State state) {
+        if (phoneActive()) client_->sendControl(command, state);
+    }
  signals:
     void managementRequested();
  private:

@@ -617,6 +617,11 @@ QWidget *ActionsSettingsTab::settings()
     auto widget = new QWidget();
     auto layout = new QVBoxLayout(widget);
 
+#ifdef DASH_CARPLAY
+    auto *hint = new QLabel("Phone controls automatically follow the active Android Auto or CarPlay connection. Your existing key and button assignments still apply.", widget);
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+#endif
     for (auto action : this->arbiter.core().actions())
         layout->addWidget(this->action_row(action));
 

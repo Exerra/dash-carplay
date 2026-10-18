@@ -9,7 +9,9 @@ pkg_check_modules(GST REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0 g
 get_filename_component(DASH_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 add_executable(carplay-native-test
     client_test.cpp
+    ${DASH_ROOT}/src/app/phone_controls.cpp
     ${DASH_ROOT}/src/carplay/client.cpp
+    ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
     ${DASH_ROOT}/src/carplay/widget.cpp
     ${DASH_ROOT}/src/carplay/touch_ui.cpp

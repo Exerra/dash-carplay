@@ -35,6 +35,10 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 - Touch management separates Phones, Display and Setup. Large selectors, an
   on-screen keyboard, validated resolution number pad and swipe scrolling work
   in both themes; controls center on larger displays.
+- The 17 original Android Auto action IDs now expose shared Phone controls.
+  Keyboard and GPIO bindings route to the active connection with AA priority;
+  CarPlay supports navigation, media, wheel, telephony and Siri input. Explicit
+  press/release messages preserve held buttons; legacy/browser taps still work.
 - Android Auto priority guard (block CarPlay start while AA is active; stop the
   CarPlay receiver if AA connects).
 - Linux BlueZ iAP2 bridge, adapter/device selection and orderly process shutdown.
@@ -59,6 +63,8 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 | Two saved phones, selection persistence and display parameters sent to receiver | Passed |
 | Wizard steps, duplicate discoveries and pairing-agent phone scoping | Passed |
 | Touch selector, keyboard accept/cancel and resolution keypad validation | Passed |
+| Shared phone action routing, AA priority and release ownership | Passed |
+| Native control IPC, simultaneous buttons, wheel, focus loss and session reset | Passed |
 | Rendered management, wizard and keyboards at 800×480 in both themes | Inspected |
 | Bundled OEM PNG and its /info advertisement | Passed |
 | Real backend startup/status/private-IPC/MFi-SAP response smoke test | Passed |
@@ -76,6 +82,13 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
 
 ## Verified on the Pi
 
+- Shared Phone controls compiled in the full Dash application; native routing,
+  control IPC, input lifecycle and configuration teardown checks passed. The
+  receiver suite passed 95 protocol tests and 26 server tests; one external MFi
+  identity test was skipped because its separate test path was not configured.
+  The updated receiver authenticated the existing iPhone and decoded live video.
+  The user confirmed the existing navigation, select and scroll keybindings work
+  with CarPlay on the Pi. Media/voice/call hardware acceptance remains separate.
 - The touch redesign was built and installed, native interaction and shutdown
   checks passed, and the user confirmed the new controls look good and work.
 - The updated connected view was captured on the Pi with setup fully hidden, and
@@ -183,6 +196,8 @@ The subsequent wizard, display settings and confirmed in-CarPlay return icon bui
 is saved separately at `/home/pi/dash-backups/carplay-ui-2026-10-18-bO7Yoq`.
 The touch redesign executable, configuration and UI sources are saved at
 `/home/pi/dash-backups/carplay-touch-ui-2026-10-18-fq3wLO` with SHA-256 checksums.
+The shared-control app, receiver and settings are saved at
+`/home/pi/dash-backups/carplay-shared-controls-2026-10-18-Xa1rzr`.
 
 See `README.md` for build/run instructions. No credentials are committed or bundled
 in the receiver source; the extracted identity remains in the workspace's external

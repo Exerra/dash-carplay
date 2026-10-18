@@ -195,19 +195,23 @@ class AirPlaySession(
     fun sendKnobSelect(down: Boolean) =
         sendHidReport(AirPlayHid.KNOB_HID_UID, AirPlayHid.knobReport(AirPlayKnobState(select = down)))
 
-    fun sendMedia(index: Int) {
-        sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(index))
-        sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(0))
+    fun sendMedia(index: Int, pressed: Boolean? = null) {
+        sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(if (pressed == false) 0 else index))
+        if (pressed == null) sendHidReport(AirPlayHid.MEDIA_HID_UID, AirPlayHid.mediaReport(0))
     }
 
-    fun sendTelephony(index: Int) {
-        sendHidReport(AirPlayHid.TELEPHONY_HID_UID, AirPlayHid.telephonyReport(index))
-        sendHidReport(AirPlayHid.TELEPHONY_HID_UID, AirPlayHid.telephonyReport(0))
+    fun sendTelephony(index: Int, pressed: Boolean? = null) {
+        sendHidReport(AirPlayHid.TELEPHONY_HID_UID, AirPlayHid.telephonyReport(if (pressed == false) 0 else index))
+        if (pressed == null) sendHidReport(AirPlayHid.TELEPHONY_HID_UID, AirPlayHid.telephonyReport(0))
     }
 
     fun invokeSiri() {
-        sendCommand(linkedMapOf("type" to "requestSiri", "params" to linkedMapOf("siriAction" to 2)))
-        sendCommand(linkedMapOf("type" to "requestSiri", "params" to linkedMapOf("siriAction" to 3)))
+        setSiriPressed(true)
+        setSiriPressed(false)
+    }
+
+    fun setSiriPressed(pressed: Boolean) {
+        sendCommand(linkedMapOf("type" to "requestSiri", "params" to linkedMapOf("siriAction" to if (pressed) 2 else 3)))
     }
 
     fun sendIapMessage(data: ByteArray, timeoutMillis: Long = 0L): Boolean {

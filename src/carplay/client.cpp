@@ -54,6 +54,7 @@ CarPlayClient::CarPlayClient(QObject *parent) : QObject(parent) {
         emit connectedChanged(true);
     });
     connect(&socket_, &QWebSocket::disconnected, this, [this] {
+        sessionActive_ = false; heldControls_.clear();
         stopMedia();
         emit connectedChanged(false);
     });
@@ -80,6 +81,7 @@ bool CarPlayClient::connectFile(const QString &path) {
 }
 
 void CarPlayClient::disconnectReceiver() {
+    sessionActive_ = false; heldControls_.clear();
     socket_.abort();
     stopMedia();
 }
@@ -112,6 +114,8 @@ void CarPlayClient::textMessage(const QString &data) {
     const auto type = object.value("type").toString();
     if (type == "hello" || type == "session") {
         const bool active = object.value("sessionActive").toBool();
+        sessionActive_ = active;
+        if (!active) heldControls_.clear();
         if (!active) stopMedia();
         else setNightMode(night_);
         emit statusChanged(active ? "CarPlay connected" : "Receiver ready. Waiting for iPhone.");

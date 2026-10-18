@@ -10,7 +10,7 @@ CarPlayPage::CarPlayPage(Arbiter &arbiter, QWidget *parent)
 void CarPlayPage::init() {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    auto *widget = new CarPlayWidget(this);
+    auto *widget = new CarPlayWidget(this); widget_ = widget;
     layout->addWidget(widget);
     connect(widget, &CarPlayWidget::managementRequested, this, [this] { arbiter.set_curr_page(this); });
     connect(&arbiter, &Arbiter::mode_changed, widget, [widget](Session::Theme::Mode mode) {
@@ -23,5 +23,10 @@ void CarPlayPage::init() {
     widget->setAndroidAutoActive(arbiter.layout().openauto_page->currentIndex() == 1);
     widget->setNightMode(arbiter.theme().mode == Session::Theme::Dark);
     widget->setVolume(arbiter.system().volume);
+}
+
+bool CarPlayPage::phoneActive() const { return widget_ && widget_->phoneActive(); }
+void CarPlayPage::sendControl(PhoneControls::Command command, PhoneControls::State state) {
+    if (widget_) widget_->sendControl(command, state);
 }
 #endif

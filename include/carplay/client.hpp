@@ -1,6 +1,7 @@
 #pragma once
 
 #ifdef DASH_CARPLAY
+#include "app/phone_controls.hpp"
 #include <QImage>
 #include <QElapsedTimer>
 #include <QJsonObject>
@@ -12,6 +13,7 @@
 #include <gst/app/gstappsink.h>
 #include <gst/gst.h>
 #include <atomic>
+#include <set>
 
 // Native Dash client for the bundled receiver. No embedded browser is required.
 class CarPlayClient : public QObject {
@@ -22,6 +24,8 @@ class CarPlayClient : public QObject {
     bool connectFile(const QString &path);
     void disconnectReceiver();
     void sendCommand(const QJsonObject &message);
+    void sendControl(PhoneControls::Command command, PhoneControls::State state);
+    bool sessionActive() const { return sessionActive_; }
     void setNightMode(bool night);
     void setVolume(int percent);
     QImage frame() const;
@@ -50,6 +54,8 @@ class CarPlayClient : public QObject {
     bool night_ = false;
     double volume_ = 1.0;
     bool enabled_ = false;
+    bool sessionActive_ = false;
+    std::set<PhoneControls::Command> heldControls_;
 
     void binaryMessage(const QByteArray &data);
     void textMessage(const QString &data);

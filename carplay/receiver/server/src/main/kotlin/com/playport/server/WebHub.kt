@@ -49,6 +49,8 @@ data class ClientMessage(
     val knob: KnobMessage? = null,
     val night: Boolean? = null,
     val telephony: Int? = null,
+    // Absent means a complete tap (legacy/browser clients). Native bindings send held states.
+    val pressed: Boolean? = null,
 )
 
 @Serializable

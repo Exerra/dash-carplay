@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <memory>
+#include "app/phone_controls.hpp"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -393,32 +395,53 @@ Session::Core::Core(QSettings &settings, Arbiter &arbiter)
     this->stylesheets_[Session::Theme::Light] = this->parse_stylesheet(":/stylesheets/light.qss");
     this->stylesheets_[Session::Theme::Dark] = this->parse_stylesheet(":/stylesheets/dark.qss");
     AAHandler *aa_handler = arbiter.android_auto().handler;
-    this->actions_ = {
-        new Action("Android Auto Left", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::LEFT, actionState); }, arbiter.window()),
-        new Action("Android Auto Enter", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::ENTER, actionState); }, arbiter.window()),
-        new Action("Android Auto Right", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::RIGHT, actionState); }, arbiter.window()),
-        new Action("Android Auto Up", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::UP, actionState); }, arbiter.window()),
-        new Action("Android Auto Down", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::DOWN, actionState); }, arbiter.window()),
-        new Action("Android Auto Back", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::BACK, actionState); }, arbiter.window()),
-        new Action("Android Auto Home", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::HOME, actionState); }, arbiter.window()),
-        new Action("Android Auto Phone", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::PHONE, actionState); }, arbiter.window()),
-        new Action("Android Auto Call End", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::CALL_END, actionState); }, arbiter.window()),
-        new Action("Android Auto Play", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::PLAY, actionState); }, arbiter.window()),
-        new Action("Android Auto Pause", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::PAUSE, actionState); }, arbiter.window()),
-        new Action("Android Auto Prev Track", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::PREV, actionState); }, arbiter.window()),
-        new Action("Android Auto Next Track", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::NEXT, actionState); }, arbiter.window()),
-        new Action("Android Auto Toggle Play", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::TOGGLE_PLAY, actionState); }, arbiter.window()),
-        new Action("Android Auto Voice", [&arbiter, aa_handler](Action::ActionState actionState){ aa_handler->injectButtonPressHelper(aasdk::proto::enums::ButtonCode::MICROPHONE_1, actionState); }, arbiter.window()),
-        new Action("Android Auto Scroll Up", [&arbiter, aa_handler](Action::ActionState actionState){ if(actionState == Action::ActionState::Activated || actionState == Action::ActionState::Triggered) aa_handler->injectButtonPress(aasdk::proto::enums::ButtonCode::SCROLL_WHEEL, openauto::projection::WheelDirection::RIGHT); }, arbiter.window()),
-        new Action("Android Auto Scroll Down", [&arbiter, aa_handler](Action::ActionState actionState){ if(actionState == Action::ActionState::Activated || actionState == Action::ActionState::Triggered) aa_handler->injectButtonPress(aasdk::proto::enums::ButtonCode::SCROLL_WHEEL, openauto::projection::WheelDirection::LEFT); }, arbiter.window()),
-
+    using Command = PhoneControls::Command;
+    using State = PhoneControls::State;
+    auto aaActive = [&arbiter] { return arbiter.layout().openauto_page->currentIndex() == 1; };
+    auto aaSend = [aa_handler](Command command, State state) {
+        if (command == Command::ScrollUp || command == Command::ScrollDown) {
+            if (state != State::Released)
+                aa_handler->injectButtonPress(aasdk::proto::enums::ButtonCode::SCROLL_WHEEL,
+                    command == Command::ScrollUp ? openauto::projection::WheelDirection::RIGHT : openauto::projection::WheelDirection::LEFT);
+            return;
+        }
+        using Button = aasdk::proto::enums::ButtonCode;
+        static const std::array<Button::Enum, 15> buttons = {{
+            Button::LEFT, Button::ENTER, Button::RIGHT, Button::UP, Button::DOWN,
+            Button::BACK, Button::HOME, Button::PHONE, Button::CALL_END, Button::PLAY,
+            Button::PAUSE, Button::PREV, Button::NEXT, Button::TOGGLE_PLAY, Button::MICROPHONE_1
+        }};
+        const auto actionState = state == State::Pressed ? Action::Activated :
+            state == State::Released ? Action::Deactivated : Action::Triggered;
+        aa_handler->injectButtonPressHelper(buttons.at(static_cast<size_t>(command)), actionState);
+    };
+    PhoneControls::Router::Active carplayActive = [] { return false; };
+    PhoneControls::Router::Send carplaySend = [](Command, State) { };
+#ifdef DASH_CARPLAY
+    for (auto page : arbiter.layout().pages()) {
+        auto *carplay = dynamic_cast<CarPlayPage *>(page);
+        if (!carplay) continue;
+        carplayActive = [carplay] { return carplay->phoneActive(); };
+        carplaySend = [carplay](Command command, State state) { carplay->sendControl(command, state); };
+        break;
+    }
+#endif
+    auto controls = std::make_shared<PhoneControls::Router>(aaActive, aaSend, carplayActive, carplaySend);
+    // Preserve all numeric action IDs, including page shortcuts that follow these controls.
+    for (const auto &binding : PhoneControls::bindings()) {
+        this->actions_.append(new Action(binding.name, [controls, command = binding.command](Action::ActionState state) {
+            controls->dispatch(command, state == Action::Activated ? State::Pressed :
+                state == Action::Deactivated ? State::Released : State::Triggered);
+        }, arbiter.window()));
+    }
+    this->actions_.append({
         new Action("Toggle Dark Mode", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.toggle_mode(); }, arbiter.window()),
         new Action("Decrease Brightness", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.decrease_brightness(4); }, arbiter.window()),
         new Action("Increase Brightness", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.increase_brightness(4); }, arbiter.window()),
         new Action("Decrease Volume", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.decrease_volume(2); }, arbiter.window()),
         new Action("Increase Volume", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.increase_volume(2); }, arbiter.window()),
         new Action("Toggle Fullscreen", [&arbiter](Action::ActionState actionState){ if(actionState == Action::ActionState::Triggered || actionState == Action::ActionState::Activated) arbiter.toggle_fullscreen(); }, arbiter.window())
-    };
+    });
 
     for (auto page : arbiter.layout().pages()) {
 #ifdef DASH_CARPLAY

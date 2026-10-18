@@ -6,6 +6,28 @@
 #include <QPainter>
 #include <QTouchEvent>
 
+namespace {
+bool commandForKey(int key, PhoneControls::Command &command) {
+    using Command = PhoneControls::Command;
+    switch (key) {
+        case Qt::Key_Left: command = Command::Left; break;
+        case Qt::Key_Right: command = Command::Right; break;
+        case Qt::Key_Up: command = Command::Up; break;
+        case Qt::Key_Down: command = Command::Down; break;
+        case Qt::Key_Return: case Qt::Key_Enter: command = Command::Enter; break;
+        case Qt::Key_Escape: command = Command::Back; break;
+        case Qt::Key_Home: command = Command::Home; break;
+        case Qt::Key_MediaPlay: command = Command::Play; break;
+        case Qt::Key_MediaPause: command = Command::Pause; break;
+        case Qt::Key_MediaTogglePlayPause: command = Command::TogglePlay; break;
+        case Qt::Key_MediaPrevious: command = Command::Previous; break;
+        case Qt::Key_MediaNext: command = Command::Next; break;
+        default: return false;
+    }
+    return true;
+}
+}
+
 CarPlaySurface::CarPlaySurface(CarPlayClient &client, QWidget *parent) : QWidget(parent), client_(client) {
     setAttribute(Qt::WA_AcceptTouchEvents);
     setFocusPolicy(Qt::StrongFocus);
@@ -74,18 +96,29 @@ void CarPlaySurface::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::LeftButton && mouseDown_) { mouseDown_ = false; mouseContact(event, false); }
 }
 void CarPlaySurface::keyPressEvent(QKeyEvent *event) {
-    if (event->isAutoRepeat()) return;
-    QJsonObject knob;
-    switch (event->key()) {
-        case Qt::Key_Left: knob.insert("x", -127); break;
-        case Qt::Key_Right: knob.insert("x", 127); break;
-        case Qt::Key_Up: knob.insert("y", -127); break;
-        case Qt::Key_Down: knob.insert("y", 127); break;
-        case Qt::Key_Return: case Qt::Key_Enter: knob.insert("select", true); break;
-        case Qt::Key_Escape: knob.insert("back", true); break;
-        default: QWidget::keyPressEvent(event); return;
+    PhoneControls::Command command;
+    if (!commandForKey(event->key(), command)) { QWidget::keyPressEvent(event); return; }
+    if (!event->isAutoRepeat() && !heldKeys_.contains(event->key())) {
+        heldKeys_.insert(event->key(), command);
+        client_.sendControl(command, PhoneControls::State::Pressed);
     }
-    client_.sendCommand({{"type", "knob"}, {"knob", knob}});
+    event->accept();
+}
+
+void CarPlaySurface::keyReleaseEvent(QKeyEvent *event) {
+    const auto found = heldKeys_.find(event->key());
+    if (found == heldKeys_.end()) { QWidget::keyReleaseEvent(event); return; }
+    if (!event->isAutoRepeat()) {
+        client_.sendControl(found.value(), PhoneControls::State::Released);
+        heldKeys_.erase(found);
+    }
+    event->accept();
+}
+
+void CarPlaySurface::focusOutEvent(QFocusEvent *event) {
+    for (auto command : heldKeys_) client_.sendControl(command, PhoneControls::State::Released);
+    heldKeys_.clear();
+    QWidget::focusOutEvent(event);
 }
 
 #endif

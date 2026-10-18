@@ -7,6 +7,7 @@
 #include <QDialog>
 #include <QDir>
 #include <QFile>
+#include <QFocusEvent>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QSettings>
@@ -100,6 +101,109 @@ class CarPlayNativeTest : public QObject {
         file.write("{\"url\":\"ws://192.0.2.1:8080/ws?token=test\"}");
         file.close();
         QVERIFY(!client.connectFile(fileName));
+    }
+
+    void sharedPhoneActionsChooseOneBackendAndKeepReleasesWithIt() {
+        using Command = PhoneControls::Command;
+        using State = PhoneControls::State;
+        bool android = false, carplay = true;
+        std::vector<std::pair<Command, State>> aa, cp;
+        PhoneControls::Router router([&] { return android; }, [&](Command c, State s) { aa.emplace_back(c,s); },
+            [&] { return carplay; }, [&](Command c, State s) { cp.emplace_back(c,s); });
+        const auto &bindings = PhoneControls::bindings();
+        QCOMPARE(bindings.size(), size_t(17));
+        QCOMPARE(bindings[1].command, Command::Enter); QCOMPARE(bindings[6].command, Command::Home);
+        QCOMPARE(bindings[13].command, Command::TogglePlay); QCOMPARE(bindings[16].command, Command::ScrollDown);
+        for (const auto &binding : bindings) router.dispatch(binding.command, State::Triggered);
+        QCOMPARE(cp.size(), size_t(17)); QVERIFY(aa.empty());
+        for (size_t i = 0; i < bindings.size(); ++i) QCOMPARE(cp[i].first, bindings[i].command);
+        android = true; // Android Auto retains priority even during an overlapping disconnect.
+        for (const auto &binding : bindings) router.dispatch(binding.command, State::Triggered);
+        QCOMPARE(aa.size(), size_t(17)); QCOMPARE(cp.size(), size_t(17));
+        android = false;
+        router.dispatch(Command::Enter, State::Pressed); router.dispatch(Command::Enter, State::Pressed);
+        QCOMPARE(cp.size(), size_t(18));
+        router.dispatch(Command::Enter, State::Released); QCOMPARE(cp.size(), size_t(19));
+        QCOMPARE(cp.back().second, State::Released);
+        router.dispatch(Command::Voice, State::Pressed);
+        android = true; carplay = false;
+        router.dispatch(Command::Voice, State::Released);
+        QCOMPARE(aa.size(), size_t(17)); // A CarPlay release must not invoke Android Auto.
+        android = false;
+        router.dispatch(Command::Play, State::Triggered); QCOMPARE(cp.size(), size_t(20));
+        router.dispatch(Command::Home, State::Pressed); // Pressed while neither phone is connected.
+        carplay = true; router.dispatch(Command::Home, State::Released);
+        QCOMPARE(cp.size(), size_t(20));
+    }
+
+    void sharedControlsReachCarPlayWithHeldStatesAndNoStaleSessionButtons() {
+        using Command = PhoneControls::Command;
+        using State = PhoneControls::State;
+        CarPlayClient client;
+        client.sendControl(Command::Play, State::Triggered); // Receiver availability alone is insufficient.
+        QWebSocketServer server("controls", QWebSocketServer::NonSecureMode);
+        QVERIFY(server.listen(QHostAddress::LocalHost, 0));
+        QTemporaryDir directory; QFile file(directory.filePath("connection.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QJsonDocument(QJsonObject{{"url", QString("ws://127.0.0.1:%1/ws?token=fixture").arg(server.serverPort())}}).toJson()); file.close();
+        QVERIFY(client.connectFile(file.fileName())); QTRY_VERIFY(server.hasPendingConnections());
+        auto *peer = server.nextPendingConnection(); QSignalSpy input(peer, &QWebSocket::textMessageReceived);
+        client.sendControl(Command::Play, State::Triggered); QTest::qWait(10); QVERIFY(input.isEmpty());
+        peer->sendTextMessage("{\"type\":\"session\",\"sessionActive\":true}"); QTRY_VERIFY(client.sessionActive());
+        QTRY_VERIFY(!input.isEmpty()); input.clear();
+        auto message = [&](int index) { return QJsonDocument::fromJson(input.at(index).at(0).toString().toUtf8()).object(); };
+        const std::array<std::pair<Command,int>,5> media = {{{Command::Play,1},{Command::Pause,2},
+            {Command::TogglePlay,3},{Command::Next,4},{Command::Previous,5}}};
+        for (const auto &key : media) client.sendControl(key.first, State::Triggered);
+        QTRY_COMPARE(input.size(), 5);
+        for (int i = 0; i < 5; ++i) {
+            QCOMPARE(message(i).value("type").toString(), QString("media"));
+            QCOMPARE(message(i).value("media").toInt(), media[i].second);
+            QVERIFY(!message(i).contains("pressed"));
+        }
+        input.clear();
+        for (auto command : {Command::Phone, Command::CallEnd, Command::Voice}) {
+            client.sendControl(command, State::Pressed); client.sendControl(command, State::Released);
+        }
+        QTRY_COMPARE(input.size(), 6);
+        QCOMPARE(message(0).value("telephony").toInt(), 1); QCOMPARE(message(2).value("telephony").toInt(), 3);
+        QCOMPARE(message(4).value("type").toString(), QString("siri"));
+        for (int i = 0; i < 6; ++i) QCOMPARE(message(i).value("pressed").toBool(), i % 2 == 0);
+        input.clear();
+        client.sendControl(Command::Enter, State::Pressed);
+        client.sendControl(Command::Right, State::Pressed);
+        client.sendControl(Command::ScrollUp, State::Triggered);
+        client.sendControl(Command::ScrollUp, State::Released);
+        client.sendControl(Command::Home, State::Triggered);
+        client.sendControl(Command::Right, State::Released);
+        client.sendControl(Command::Enter, State::Released);
+        QTRY_COMPARE(input.size(), 7);
+        QVERIFY(message(1).value("knob").toObject().value("select").toBool());
+        QCOMPARE(message(1).value("knob").toObject().value("x").toInt(), 127);
+        QCOMPARE(message(2).value("knob").toObject().value("wheel").toInt(), 1);
+        QVERIFY(message(2).value("knob").toObject().value("select").toBool());
+        QVERIFY(message(3).value("knob").toObject().value("home").toBool());
+        QVERIFY(!message(4).value("knob").toObject().value("home").toBool());
+        QVERIFY(message(4).value("knob").toObject().value("select").toBool());
+        QCOMPARE(message(5).value("knob").toObject().value("x").toInt(), 0);
+        QVERIFY(!message(6).value("knob").toObject().value("select").toBool());
+        input.clear();
+        CarPlaySurface surface(client); surface.show();
+        QTest::keyPress(&surface, Qt::Key_Left); QTest::keyRelease(&surface, Qt::Key_Left);
+        QTest::keyPress(&surface, Qt::Key_Return);
+        QFocusEvent focusOut(QEvent::FocusOut); QApplication::sendEvent(&surface, &focusOut);
+        QTRY_COMPARE(input.size(), 4);
+        QCOMPARE(message(0).value("knob").toObject().value("x").toInt(), -127);
+        QCOMPARE(message(1).value("knob").toObject().value("x").toInt(), 0);
+        QVERIFY(!message(3).value("knob").toObject().value("select").toBool());
+        client.sendControl(Command::Enter, State::Pressed);
+        peer->sendTextMessage("{\"type\":\"session\",\"sessionActive\":false}"); QTRY_VERIFY(!client.sessionActive());
+        peer->sendTextMessage("{\"type\":\"session\",\"sessionActive\":true}"); QTRY_VERIFY(client.sessionActive());
+        QTest::qWait(10); input.clear(); client.sendControl(Command::Down, State::Triggered);
+        QTRY_COMPARE(input.size(), 2);
+        QVERIFY(!message(0).value("knob").toObject().value("select").toBool());
+        QCOMPARE(message(0).value("knob").toObject().value("y").toInt(), 127);
+        client.disconnectReceiver(); QVERIFY(!client.sessionActive()); peer->deleteLater();
     }
     void pairingAgentOnlyAcceptsTheChosenPhone() {
         CarPlayPairingAgent agent;

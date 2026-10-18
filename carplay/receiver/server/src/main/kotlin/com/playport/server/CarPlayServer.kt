@@ -234,7 +234,7 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
                 "touch" -> session.sendTouch(
                     message.contacts.map { AirPlayContact(it.id, it.x, it.y, it.down) },
                 )
-                "media" -> message.media?.let(session::sendMedia)
+                "media" -> message.media?.let { session.sendMedia(it, message.pressed) }
                 "knob" -> message.knob?.let {
                     session.sendKnob(
                         AirPlayKnobState(
@@ -245,10 +245,11 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
                             y = it.y,
                             wheel = it.wheel,
                         ),
+                        momentary = message.pressed == null,
                     )
                 }
-                "siri" -> session.invokeSiri()
-                "telephony" -> message.telephony?.let(session::sendTelephony)
+                "siri" -> if (message.pressed == null) session.invokeSiri() else session.setSiriPressed(message.pressed)
+                "telephony" -> message.telephony?.let { session.sendTelephony(it, message.pressed) }
                 "night" -> message.night?.let(session::setNightMode)
                 "show-ui" -> {
                     session.sendCommand(mapOf("type" to "showUI", "params" to mapOf("uuid" to AirPlayInfoPlist.MAIN_UUID)))

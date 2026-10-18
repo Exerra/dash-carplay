@@ -101,6 +101,33 @@ token file has owner-only permissions. The frontend initially requests H.264,
 800×480 at 30 fps. Decoder output uses a bounded latest-frame Qt image; benchmark
 this copy-based renderer on the actual Pi before increasing resolution.
 
+## Shared phone controls
+
+In **Settings → Actions**, the former Android Auto actions are now named **Phone**
+actions. Existing keyboard shortcuts and GPIO assignments keep their original
+numeric IDs and automatically control the active Android Auto or CarPlay phone.
+Android Auto retains priority if both connections overlap; with neither phone
+connected the actions do nothing. Media actions work while another Dash page is
+visible, including CarPlay management.
+
+| Action | CarPlay input |
+| --- | --- |
+| Left / Right / Up / Down | Controller direction |
+| Enter / Back / Home | Select / Back / Home |
+| Play / Pause / Toggle Play | Media play / pause / toggle |
+| Prev Track / Next Track | Media previous / next |
+| Scroll Up / Scroll Down | Rotary wheel movement |
+| Phone / Answer Call | Telephony hook switch (answer) |
+| Call End | Telephony drop |
+| Voice | Siri button |
+
+Single-key bindings send separate press and release events. GPIO and shortcut
+chords send complete taps. The CarPlay event channel preserves held states, and
+disconnecting clears local held buttons. Unassigned arrow, Enter, Escape, Home
+and media keys also work directly when the CarPlay picture has keyboard focus.
+Voice and call button routing does not add real microphone capture; the prototype
+still supplies silent input as described below.
+
 The launcher offers a silent PCM/Opus microphone input because the test iPhone
 would not route music to an accessory without input capability. It captures no
 sound; a real microphone still needs to be implemented for calls and Siri.
