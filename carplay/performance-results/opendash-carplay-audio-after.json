@@ -1,0 +1,10 @@
+[
+  {
+    "application.name": "dash",
+    "media.class": "Stream/Output/Audio",
+    "node.latency": "960/48000",
+    "node.rate": "1/48000",
+    "pulse.attr.minreq": 3840,
+    "pulse.attr.tlength": 15360
+  }
+]

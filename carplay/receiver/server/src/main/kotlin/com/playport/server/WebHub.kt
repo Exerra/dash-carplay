@@ -199,6 +199,15 @@ class WebHub(
         broadcastBinary(Wire.audioStopped(type))
     }
 
+    fun broadcastAudioFlushed(type: Int) {
+        val format = audioFormatByStream[type] ?: return
+        // Existing native/browser clients clear queued sound on STOPPED and
+        // recreate the decoder on CONFIG. Keep transport, format and mic alive.
+        // AudioStream serializes this pair with delivery of the next RTP packet.
+        broadcastBinary(Wire.audioStopped(type))
+        broadcastBinary(Wire.audioConfig(type, format))
+    }
+
     private fun broadcastBinary(bytes: ByteArray) {
         for (client in clients) {
             client.channel.trySend(Frame.Binary(true, bytes))

@@ -1,5 +1,6 @@
 #ifdef DASH_CARPLAY
 #include "carplay/client.hpp"
+#include "carplay/audio_output.hpp"
 #include <QFile>
 #include <QDebug>
 #include <QJsonDocument>
@@ -219,6 +220,7 @@ void CarPlayClient::configureAudio(const QByteArray &data) {
         stopPipeline(audio.pipeline, audio.source);
         return;
     }
+    CarPlayAudio::configurePipeline(audio.pipeline);
     audio.source = gst_bin_get_by_name(GST_BIN(audio.pipeline), "source");
     if (!audio.source) { stopPipeline(audio.pipeline, audio.source); return; }
     GstCaps *caps = gst_caps_new_simple(capsName, "rate", G_TYPE_INT, rate, "channels", G_TYPE_INT, channels, nullptr);

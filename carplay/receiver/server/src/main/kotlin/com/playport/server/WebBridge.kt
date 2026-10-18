@@ -62,6 +62,10 @@ class WebBridge(private val hub: WebHub, private val silentMicrophone: Boolean =
         hub.broadcastAudioStopped(type)
     }
 
+    override fun onAudioFlushed(type: Int) {
+        hub.broadcastAudioFlushed(type)
+    }
+
     @Volatile private var microphone: MicUplink? = null
     private var silentInput: SilentMicrophone? = null
 

@@ -41,6 +41,7 @@ interface AirPlayMediaHandler {
     fun onAudio(session: AirPlaySession, type: Int, stream: Map<String, Any?>): Map<String, Any?>? = null
     fun onDataStream(session: AirPlaySession, stream: Map<String, Any?>): Map<String, Any?>? = null
     fun onFeedback(session: AirPlaySession): Map<String, Any?>? = null
+    fun onFlush(session: AirPlaySession, point: AudioFlushPoint) {}
     fun onTeardown(session: AirPlaySession, type: Int) {}
     fun onSessionClosed(session: AirPlaySession) {}
     fun setIapTunnelHandler(handler: ((BlockingDuplexByteStream) -> Boolean)?) {}
@@ -355,6 +356,12 @@ class AirPlaySession(
     private fun handle(request: RtspMessage.Request): RtspMessage.Response {
         when (request.method) {
             "SETUP" -> return handleSetup(request)
+            "FLUSH" -> {
+                val point = AudioFlushPoint.parse(request.headers["rtp-info"])
+                media.onFlush(this, point)
+                debugLog("airplay audio playback flushed seq=${point.sequence} rtptime=${point.timestamp}")
+                return RtspMessage.Response(status = 200)
+            }
             "RECORD" -> {
                 listener.onSessionActive(this)
                 return RtspMessage.Response(status = 200)

@@ -21,6 +21,7 @@ interface MediaSink {
     fun onAudioStarted(type: Int, format: AudioFormat, firstSample: Int) {}
     fun onAudioRtp(type: Int, format: AudioFormat, rtp: ByteArray, sample: Int) {}
     fun onAudioStopped(type: Int) {}
+    fun onAudioFlushed(type: Int) {}
     fun onMicrophoneStarted(type: Int, config: MicrophoneConfig) {}
     fun onMicrophoneStopped(type: Int) {}
     fun onIapMessage(bytes: ByteArray) {}
@@ -138,7 +139,7 @@ class CarPlayMediaEngine(
 
         val capture = audioCaptureDirectory?.let { AudioPacketCapture(it, type) }
         if (capture != null) audioCaptures[type] = capture
-        val audio = AudioStream(key, type, session::logDebug)
+        val audio = AudioStream(key, type, session::logDebug, format.sampleRate)
         val (dataPort, controlPort) = audio.listen(
             object : AudioStream.Listener {
                 override fun onStarted(firstSample: Int) {
@@ -276,6 +277,16 @@ class CarPlayMediaEngine(
             entry
         }
         return linkedMapOf("streams" to streams)
+    }
+
+    override fun onFlush(session: AirPlaySession, point: AudioFlushPoint) {
+        streams.entries.filter { it.key.session === session }.forEach { (key, stream) ->
+            // Auxiliary speech/navigation streams have independent RTP timelines.
+            val audioType = audioMeta[key.type]?.format?.audioType ?: "default"
+            if (audioType == "media" || audioType == "default") {
+                (stream as? AudioStream)?.flush(point) { sink.onAudioFlushed(key.type) }
+            }
+        }
     }
 
     override fun onTeardown(session: AirPlaySession, type: Int) {

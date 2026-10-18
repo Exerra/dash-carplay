@@ -128,6 +128,11 @@ Bluetooth radio stay available for the other receiver and ordinary Bluetooth use
 
 ## Shared phone controls
 
+For wireless CarPlay music, Dash uses a 60 ms output-buffer request and clears
+queued sound when the iPhone sends FLUSH for playback changes. See
+[AUDIO_LATENCY.md](AUDIO_LATENCY.md) for measured response, validation limits and
+the `CARPLAY_AUDIO_BUFFER_MS` compatibility override.
+
 In **Settings → Actions**, the former Android Auto actions are now named **Phone**
 actions. Existing keyboard shortcuts and GPIO assignments keep their original
 numeric IDs and automatically control the active Android Auto or CarPlay phone.

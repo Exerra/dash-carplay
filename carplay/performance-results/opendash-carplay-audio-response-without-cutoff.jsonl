@@ -1,0 +1,2 @@
+{"trial": 0, "baselineRms": 1242.7, "pauseToFirstQuietMs": 67.9, "pauseToSettledQuietMs": 929.3, "audibleAfterFirstQuietMs": 100, "pauseToFlushMs": 47.1}
+{"trial": 1, "baselineRms": 803.5, "pauseToFirstQuietMs": 64.2, "pauseToSettledQuietMs": 927.1, "audibleAfterFirstQuietMs": 590, "pauseToFlushMs": 45.2}

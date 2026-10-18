@@ -1,4 +1,5 @@
 #include "carplay/client.hpp"
+#include "carplay/audio_output.hpp"
 #include "carplay/surface.hpp"
 #include "carplay/widget.hpp"
 #include "carplay/pairing_agent.hpp"
@@ -66,6 +67,47 @@ class CarPlayNativeTest : public QObject {
             const auto pixel = image.pixelColor(point);
             QVERIFY(pixel.red() >= 245); QVERIFY(pixel.green() <= 10); QVERIFY(pixel.blue() <= 10);
         }
+    }
+
+    void audioLatencyOnlyChangesOutputBufferingAndSupportsRollback() {
+        gst_init(nullptr, nullptr);
+        const bool hadOverride = qEnvironmentVariableIsSet("CARPLAY_AUDIO_BUFFER_MS");
+        const auto previous = qgetenv("CARPLAY_AUDIO_BUFFER_MS");
+        struct Restore { bool had; QByteArray value; ~Restore() {
+            if (had) qputenv("CARPLAY_AUDIO_BUFFER_MS", value); else qunsetenv("CARPLAY_AUDIO_BUFFER_MS");
+        }} restore{hadOverride, previous};
+        qunsetenv("CARPLAY_AUDIO_BUFFER_MS");
+        QCOMPARE(CarPlayAudio::bufferMs(), 60);
+        for (const auto &invalid : {"0", "39", "501", "invalid"}) {
+            qputenv("CARPLAY_AUDIO_BUFFER_MS", invalid); QCOMPARE(CarPlayAudio::bufferMs(), 60);
+        }
+        auto *fake = gst_element_factory_make("fakesink", nullptr);
+        QVERIFY(fake); QVERIFY(!CarPlayAudio::configureOutput(fake)); gst_object_unref(fake);
+        GstElement *sink = nullptr;
+        for (const auto *factory : {"pulsesink", "alsasink", "osxaudiosink", "wasapisink"}) {
+            sink = gst_element_factory_make(factory, nullptr); if (sink) break;
+        }
+        QVERIFY2(sink, "An audio sink plugin is required; no device is opened by this test");
+        gboolean syncBefore = false; g_object_get(sink, "sync", &syncBefore, nullptr);
+        for (const int target : {60, 200, 40}) {
+            qputenv("CARPLAY_AUDIO_BUFFER_MS", QByteArray::number(target));
+            QVERIFY(CarPlayAudio::configureOutput(sink));
+            gint64 buffer = 0, period = 0; gboolean sync = false;
+            g_object_get(sink, "buffer-time", &buffer, "latency-time", &period, "sync", &sync, nullptr);
+            QCOMPARE(buffer, gint64(target)*1000); QCOMPARE(period, gint64(10000)); QCOMPARE(sync, syncBefore);
+        }
+        // autoaudiosink adds its selected output inside a nested bin at READY.
+        // Exercise that late-child path without opening an audio device.
+        g_object_set(sink, "buffer-time", gint64(200000), nullptr);
+        qputenv("CARPLAY_AUDIO_BUFFER_MS", "60");
+        auto *pipeline = gst_pipeline_new(nullptr);
+        CarPlayAudio::configurePipeline(pipeline);
+        auto *nested = gst_bin_new(nullptr);
+        QVERIFY(gst_bin_add(GST_BIN(pipeline), nested));
+        QVERIFY(gst_bin_add(GST_BIN(nested), sink));
+        gint64 applied = 0; g_object_get(sink, "buffer-time", &applied, nullptr);
+        QCOMPARE(applied, gint64(60000));
+        gst_object_unref(pipeline);
     }
 
     void androidAutoBlocksAndStopsTheReceiver() {

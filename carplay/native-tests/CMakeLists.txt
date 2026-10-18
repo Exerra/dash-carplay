@@ -13,6 +13,7 @@ add_executable(carplay-native-test
     ${DASH_ROOT}/src/app/receiver_settings.cpp
     ${DASH_ROOT}/include/app/receiver_settings.hpp
     ${DASH_ROOT}/src/carplay/client.cpp
+    ${DASH_ROOT}/src/carplay/audio_output.cpp
     ${DASH_ROOT}/src/carplay/video_frame.cpp
     ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
@@ -36,6 +37,7 @@ target_link_libraries(carplay-native-test PRIVATE Qt5::Widgets Qt5::WebSockets Q
 add_test(NAME carplay-native COMMAND carplay-native-test)
 add_executable(carplay-media-benchmark media_benchmark.cpp
     ${DASH_ROOT}/src/carplay/client.cpp ${DASH_ROOT}/src/carplay/controls.cpp
+    ${DASH_ROOT}/src/carplay/audio_output.cpp
     ${DASH_ROOT}/src/carplay/video_frame.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp ${DASH_ROOT}/src/app/phone_controls.cpp
     ${DASH_ROOT}/include/carplay/client.hpp ${DASH_ROOT}/include/carplay/surface.hpp)
@@ -55,6 +57,9 @@ if(APPLE)
         endif()
         file(CREATE_LINK "${plugin_file}" "${CMAKE_CURRENT_BINARY_DIR}/plugins/libgst${plugin}.dylib" SYMBOLIC)
     endforeach()
+    if(EXISTS "${GST_PLUGIN_DIR}/libgstosxaudio.dylib")
+        file(CREATE_LINK "${GST_PLUGIN_DIR}/libgstosxaudio.dylib" "${CMAKE_CURRENT_BINARY_DIR}/plugins/libgstosxaudio.dylib" SYMBOLIC)
+    endif()
     list(APPEND CARPLAY_TEST_ENV
         "GST_PLUGIN_SYSTEM_PATH_1_0=${CMAKE_CURRENT_BINARY_DIR}/plugins"
         "GST_REGISTRY_1_0=${CMAKE_CURRENT_BINARY_DIR}/registry.bin")

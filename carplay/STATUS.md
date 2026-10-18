@@ -21,6 +21,10 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   measured gains, the small-resolution CPU tradeoff and hardware codec limits.
 - Native AAC/Opus/PCM playback pipelines. Actual AAC-LC stereo music at 48 kHz
   was received, decrypted and played through HDMI on the Pi.
+- Low-latency output buffering and RTSP FLUSH handling to clear queued audio and
+  reject stale UDP packets while preserving the session/microphone. Digital-monitor
+  Pause tests settled at 74–88 ms without an audible return; the user confirmed
+  clean Pause/Resume, track changes and lyrics. See `AUDIO_LATENCY.md` for limits.
 - Silent PCM/Opus input for audio-device compatibility without capturing a
   microphone. Real voice input, calls and Siri conversations remain unsupported.
 - Receiver start/stop from Dash, authenticated loopback IPC and a private runtime

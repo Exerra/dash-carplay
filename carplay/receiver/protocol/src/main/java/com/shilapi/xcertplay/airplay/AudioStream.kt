@@ -30,6 +30,7 @@ class AudioStream(
     private val key: ByteArray,
     private val streamType: Int = -1,
     private val onDiagnostic: (String) -> Unit = {},
+    private val sampleRate: Int = 48_000,
 ) : Closeable {
     interface Listener {
         fun onStarted(firstSample: Int) {}
@@ -51,6 +52,41 @@ class AudioStream(
     private var dataThread: Thread? = null
     private var controlThread: Thread? = null
     private var started = false
+    private val deliveryLock = Any()
+    private var flushPoint = AudioFlushPoint()
+    private var flushDropped = 0
+
+    /** Order the playback reset after in-flight delivery and before the next packet. */
+    fun flush(point: AudioFlushPoint = AudioFlushPoint(), resetPlayback: () -> Unit) = synchronized(deliveryLock) {
+        if (!closed.get()) {
+            flushPoint = point
+            flushDropped = 0
+            resetPlayback()
+        }
+    }
+
+    /** Keep the cutoff through three seconds of the new timeline to reject late retransmits.
+     * Expiring it prevents half-range modular comparisons rejecting a long-running stream.
+     * Only authenticated packets may advance this state; the timestamp is part of the AEAD AAD.
+     */
+    private fun retainAfterFlush(rtp: ByteArray, sample: Int): Boolean {
+        val point = flushPoint
+        val distance = point.timestamp?.let { sample - it.toInt() }
+            ?: point.sequence?.let { boundary ->
+                val sequence = ((rtp[2].toInt() and 0xff) shl 8) or (rtp[3].toInt() and 0xff)
+                ((sequence - boundary + 0x8000) and 0xffff) - 0x8000
+            } ?: return true
+        if (distance < 0) {
+            if (++flushDropped == 1) onDiagnostic("audio type=$streamType dropping pre-flush packets")
+            return false
+        }
+        val expiry = if (point.timestamp != null) sampleRate * 3 else 512
+        if (distance >= expiry) {
+            onDiagnostic("audio type=$streamType flush cutoff complete dropped=$flushDropped")
+            flushPoint = AudioFlushPoint()
+        }
+        return true
+    }
 
     fun listen(listener: Listener): Pair<Int, Int> {
         val data = bindAnyPort()
@@ -149,11 +185,15 @@ class AudioStream(
                     )
                 }
                 listener.onPacket(wire, rtp, sample, null)
-                if (!started) {
-                    started = true
-                    listener.onStarted(sample)
+                synchronized(deliveryLock) {
+                    if (!closed.get() && retainAfterFlush(rtp, sample)) {
+                        if (!started) {
+                            started = true
+                            listener.onStarted(sample)
+                        }
+                        listener.onRtp(rtp, sample)
+                    }
                 }
-                listener.onRtp(rtp, sample)
                 stats.processed()
             }
         } finally { stats.flush(ended = true) }
