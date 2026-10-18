@@ -21,6 +21,17 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   microphone. Real voice input, calls and Siri conversations remain unsupported.
 - Receiver start/stop from Dash, authenticated loopback IPC and a private runtime
   connection file. Wi-Fi passwords are passed through the process environment.
+- Projection fills the page after the first decoded frame; setup returns on
+  disconnect. Settings → CarPlay → Phones & display opens management without
+  ending a session, with a Return to CarPlay action.
+- The OpenDash OEM icon is advertised on the CarPlay home screen; the phone's
+  requestUI callback opens native management. Return to CarPlay requests showUI
+  and a fresh frame while keeping the phone session alive.
+- A three-step iPhone wizard performs discovery/pairing with an in-Dash BlueZ
+  confirmation, then explains Wi-Fi joining and CarPlay approval. Saved named
+  phones support selection, renaming and removal; one connects at a time.
+- Resolution presets, custom even sizes and 30/60 fps persist in Dash settings.
+  Apply & reconnect restarts the receiver with those exact display parameters.
 - Android Auto priority guard (block CarPlay start while AA is active; stop the
   CarPlay receiver if AA connects).
 - Linux BlueZ iAP2 bridge, adapter/device selection and orderly process shutdown.
@@ -35,12 +46,16 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 | --- | --- |
 | Receiver JVM build | Passed, Java 21 |
 | Protocol tests | 92 passed, no skips |
-| Receiver tests | 25 passed, no skips |
+| Receiver tests | 26 passed, no skips |
 | Extracted identity loaded by the JVM and used to sign a challenge | Passed |
 | Linux helper's transport/selection/FD tests (no BlueZ hardware) | 6 passed |
 | Native Qt 5 client, surface and lifecycle widget | Compiled |
 | Native H.264 fixture decode and touch/letterbox test | Passed |
 | Android Auto priority and local-endpoint validation tests | Passed |
+| Connected-view transitions and returning from management | Passed |
+| Two saved phones, selection persistence and display parameters sent to receiver | Passed |
+| Wizard steps, duplicate discoveries and pairing-agent phone scoping | Passed |
+| Bundled OEM PNG and its /info advertisement | Passed |
 | Real backend startup/status/private-IPC/MFi-SAP response smoke test | Passed |
 | macOS Bluetooth helper | Compiled; no pairing attempted |
 | Optional browser diagnostic client | Bun build/input checks passed |
@@ -55,6 +70,11 @@ components. The complete Dash executable was not built here: its existing
 Linux-only Android Auto/BlueZ dependency stack still needs the target environment.
 
 ## Verified on the Pi
+
+- The updated connected view was captured on the Pi with setup fully hidden, and
+  the user confirmed management and returning to CarPlay work. A direct test of
+  the wizard's real Bluetooth controller found the existing paired iPhone. A
+  second, newly paired phone still needs end-to-end acceptance.
 
 - Raspberry Pi 5, 4 GB RAM, aarch64, Debian/Raspberry Pi OS 12 Bookworm; existing
   OpenAuto/AASDK and QtGStreamer installations reused.

@@ -30,6 +30,7 @@ class CarPlayClient : public QObject {
     void statusChanged(const QString &message);
     void connectedChanged(bool connected);
     void frameChanged();
+    void hostUiRequested();
 
  private:
     struct AudioPipeline { GstElement *pipeline = nullptr; GstElement *source = nullptr; };

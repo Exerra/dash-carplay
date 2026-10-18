@@ -22,6 +22,9 @@
 #include "app/widgets/selector.hpp"
 #include "app/widgets/switch.hpp"
 #include "gitversion.h"
+#ifdef DASH_CARPLAY
+#include "carplay/widget.hpp"
+#endif
 
 SettingsPage::SettingsPage(Arbiter &arbiter, QWidget *parent)
     : QTabWidget(parent)
@@ -34,6 +37,21 @@ void SettingsPage::init()
     this->addTab(new MainSettingsTab(this->arbiter), "Main");
     this->addTab(new LayoutSettingsTab(this->arbiter), "Layout");
     this->addTab(new BluetoothSettingsTab(this->arbiter, this), "Bluetooth");
+#ifdef DASH_CARPLAY
+    auto *carplay = new QWidget(this);
+    auto *carplayLayout = new QVBoxLayout(carplay);
+    auto *description = new QLabel("Manage saved iPhones, add a phone, or change CarPlay resolution and frame rate.", carplay);
+    description->setWordWrap(true); carplayLayout->addWidget(description);
+    auto *manage = new QPushButton("Phones && display", carplay); manage->setMinimumHeight(44); carplayLayout->addWidget(manage); carplayLayout->addStretch();
+    connect(manage, &QPushButton::clicked, this, [this] {
+        if (auto *widget = this->arbiter.window()->findChild<CarPlayWidget *>()) {
+            widget->showSetup();
+            for (auto *page : this->arbiter.layout().pages())
+                if (page->name() == "CarPlay") { this->arbiter.set_curr_page(page); break; }
+        }
+    });
+    this->addTab(carplay, "CarPlay");
+#endif
     this->addTab(new ActionsSettingsTab(this->arbiter), "Actions");
     this->addTab(new AboutSettingsTab(this->arbiter), "About");
 }

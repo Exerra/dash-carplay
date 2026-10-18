@@ -18,4 +18,5 @@ if [ -n "${CARPLAY_BIND_ADDRESS:-}" ]; then
 fi
 exec server/build/install/server/bin/server \
   --wireless --identity-dir "$carplay_identity" --state-dir "$carplay_state" \
-  --device-name OpenDash --width 800 --height 480 --fps 30 --silent-microphone --http --web-bind 127.0.0.1 "$@"
+  --device-name OpenDash --width "${CARPLAY_WIDTH:-800}" --height "${CARPLAY_HEIGHT:-480}" \
+  --fps "${CARPLAY_FPS:-30}" --silent-microphone --http --web-bind 127.0.0.1 "$@"

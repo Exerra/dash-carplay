@@ -1,6 +1,8 @@
 #include "carplay/client.hpp"
 #include "carplay/surface.hpp"
 #include "carplay/widget.hpp"
+#include "carplay/pairing_agent.hpp"
+#include "carplay/phone_wizard.hpp"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonArray>
@@ -22,6 +24,12 @@ class CarPlayNativeTest : public QObject {
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
     }
 
+    void init() {
+        QSettings settings;
+        settings.remove("CarPlay");
+        settings.setValue("CarPlay/bluetooth_address", "00:11:22:33:44:55");
+    }
+
     void androidAutoBlocksAndStopsTheReceiver() {
         const auto runner = settingsDirectory_.filePath("receiver");
         QFile executable(runner);
@@ -31,11 +39,8 @@ class CarPlayNativeTest : public QObject {
         QSettings settings;
         settings.setValue("CarPlay/receiver_command", runner);
         CarPlayWidget widget;
-        QPushButton *start = nullptr, *stop = nullptr;
-        for (auto *button : widget.findChildren<QPushButton *>()) {
-            if (button->text() == "Start CarPlay") start = button;
-            if (button->text() == "Stop") stop = button;
-        }
+        auto *start = widget.findChild<QPushButton *>("connectCarPlay");
+        auto *stop = widget.findChild<QPushButton *>("stopCarPlay");
         QVERIFY(start && stop);
         widget.setAndroidAutoActive(true);
         start->click();
@@ -43,11 +48,45 @@ class CarPlayNativeTest : public QObject {
         QVERIFY(!stop->isEnabled());
         widget.setAndroidAutoActive(false);
         start->click();
-        QVERIFY(!start->isEnabled());
         QVERIFY(stop->isEnabled());
         widget.setAndroidAutoActive(true);
-        QTRY_VERIFY_WITH_TIMEOUT(start->isEnabled(), 4000);
-        QVERIFY(!stop->isEnabled());
+        QTRY_VERIFY_WITH_TIMEOUT(!stop->isEnabled(), 4000);
+        QVERIFY(start->isEnabled());
+    }
+    void selectedPhoneAndResolutionReachTheReceiverAndPersist() {
+        const auto capture = settingsDirectory_.filePath("environment");
+        const auto runner = settingsDirectory_.filePath("capture-receiver");
+        QFile executable(runner);
+        QVERIFY(executable.open(QIODevice::WriteOnly));
+        executable.write(("#!/bin/sh\nprintf '%s\\n' \"$CARPLAY_BT_ADDRESS\" \"$CARPLAY_WIDTH\" \"$CARPLAY_HEIGHT\" \"$CARPLAY_FPS\" > '" + capture + "'\nexec sleep 30\n").toUtf8());
+        executable.close();
+        QVERIFY(executable.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+        QSettings settings;
+        settings.setValue("CarPlay/receiver_command", runner);
+        settings.beginWriteArray("CarPlay/phones", 2);
+        settings.setArrayIndex(0); settings.setValue("name", "First iPhone"); settings.setValue("address", "00:11:22:33:44:55");
+        settings.setArrayIndex(1); settings.setValue("name", "Second iPhone"); settings.setValue("address", "AA:BB:CC:DD:EE:FF");
+        settings.endArray();
+        {
+            CarPlayWidget widget;
+            auto *phones = widget.findChild<QComboBox *>("savedPhones");
+            QCOMPARE(phones->count(), 2);
+            phones->setCurrentIndex(1);
+            auto *resolution = widget.findChild<QComboBox *>("resolutionPreset");
+            resolution->setCurrentIndex(resolution->findData(QSize(1280,720)));
+            auto *fps = widget.findChild<QComboBox *>("carplayFps"); fps->setCurrentIndex(1);
+            widget.findChild<QPushButton *>("connectCarPlay")->click();
+            QTRY_VERIFY(QFile::exists(capture));
+            QFile result(capture); QVERIFY(result.open(QIODevice::ReadOnly));
+            QCOMPARE(result.readAll(), QByteArray("AA:BB:CC:DD:EE:FF\n1280\n720\n60\n"));
+            widget.setAndroidAutoActive(true);
+            QTRY_VERIFY(!widget.findChild<QPushButton *>("stopCarPlay")->isEnabled());
+        }
+        CarPlayWidget restored;
+        QCOMPARE(restored.findChild<QComboBox *>("savedPhones")->currentText(), QString("Second iPhone"));
+        QCOMPARE(restored.findChild<QSpinBox *>("carplayWidth")->value(), 1280);
+        QCOMPARE(restored.findChild<QSpinBox *>("carplayHeight")->value(), 720);
+        QCOMPARE(restored.findChild<QComboBox *>("carplayFps")->currentData().toInt(), 60);
     }
     void rejectsNonLocalConnectionFiles() {
         CarPlayClient client;
@@ -59,9 +98,44 @@ class CarPlayNativeTest : public QObject {
         file.close();
         QVERIFY(!client.connectFile(fileName));
     }
+    void pairingAgentOnlyAcceptsTheChosenPhone() {
+        CarPlayPairingAgent agent;
+        const QDBusObjectPath selected("/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF");
+        QVERIFY(!agent.accepts(selected));
+        agent.select("aa:bb:cc:dd:ee:ff");
+        QVERIFY(agent.accepts(selected));
+        QVERIFY(!agent.accepts(QDBusObjectPath("/org/bluez/hci0/dev_00_11_22_33_44_55")));
+        agent.select(QString());
+        QVERIFY(!agent.accepts(selected));
+    }
+    void wizardGuidesPairedPhonesAndDeduplicatesDiscovery() {
+        auto *bluetooth = new CarPlayPhones(nullptr, false);
+        CarPlayPhoneWizard wizard("Test Wi-Fi", "test-password", nullptr, bluetooth);
+        wizard.show(); QTest::qWait(20);
+        QCOMPARE(wizard.currentId(), 0);
+        wizard.next(); QCOMPARE(wizard.currentId(), 0); // cannot proceed with no phone
+        emit bluetooth->found("Alice", "AA:BB:CC:DD:EE:FF", true);
+        emit bluetooth->found("Alice", "AA:BB:CC:DD:EE:FF", true);
+        emit bluetooth->found("Bob", "00:11:22:33:44:55", true);
+        auto *list = wizard.findChild<QListWidget *>("discoveredPhones");
+        QCOMPARE(list->count(), 2);
+        list->setCurrentRow(1);
+        wizard.next(); QCOMPARE(wizard.currentId(), 1);
+        QCOMPARE(wizard.ssid(), QString("Test Wi-Fi"));
+        wizard.next(); QCOMPARE(wizard.currentId(), 2);
+        QCOMPARE(wizard.phoneName(), QString("Bob"));
+        QCOMPARE(wizard.phoneAddress(), QString("00:11:22:33:44:55"));
+        wizard.reject();
+        QVERIFY(!QSettings().contains("CarPlay/wifi_password"));
+    }
 
     void decodesVideoAndMapsTouchInsideLetterboxing() {
-        CarPlayClient client;
+        CarPlayWidget widget;
+        widget.resize(1000, 600); widget.show();
+        auto &client = *widget.findChild<CarPlayClient *>();
+        auto *views = widget.findChild<QStackedWidget *>("carplayViews");
+        auto *projection = widget.findChild<QWidget *>("carplayProjection");
+        QVERIFY(views->currentWidget() != projection);
         QWebSocketServer server("fixture", QWebSocketServer::NonSecureMode);
         QVERIFY(server.listen(QHostAddress::LocalHost, 0));
         QTemporaryDir directory;
@@ -72,13 +146,16 @@ class CarPlayNativeTest : public QObject {
         file.close();
         QSignalSpy connected(&server, &QWebSocketServer::newConnection);
         QVERIFY(client.connectFile(fileName));
-        QVERIFY(connected.wait(2000));
+        QTRY_VERIFY_WITH_TIMEOUT(server.hasPendingConnections(), 3000);
         auto *peer = server.nextPendingConnection();
         QVERIFY(peer);
         QCOMPARE(peer->requestUrl().query(), QString("token=fixture"));
         QSignalSpy input(peer, &QWebSocket::textMessageReceived);
         QSignalSpy status(&client, &CarPlayClient::statusChanged);
         QSignalSpy decoded(&client, &CarPlayClient::frameChanged);
+        peer->sendTextMessage("{\"type\":\"session\",\"sessionActive\":true}");
+        QTest::qWait(30);
+        QVERIFY(views->currentWidget() != projection); // authenticated control is not video readiness
         peer->sendTextMessage("{\"type\":\"receiver\",\"message\":\"Pair the iPhone first\"}");
         QTRY_VERIFY(!status.isEmpty() && status.last().at(0).toString() == "Pair the iPhone first");
 
@@ -132,12 +209,31 @@ class CarPlayNativeTest : public QObject {
         gst_object_unref(generator);
         QTRY_VERIFY_WITH_TIMEOUT(!client.frame().isNull(), 5000);
         QTRY_COMPARE_WITH_TIMEOUT(decoded.count(), 60, 5000);
+        QTRY_COMPARE(views->currentWidget(), projection);
+        QVERIFY(!widget.findChild<QPushButton *>("addPhone")->isVisible());
+        widget.showSetup();
+        QVERIFY(views->currentWidget() != projection);
+        QVERIFY(!client.frame().isNull()); // settings do not stop the session
+        widget.findChild<QPushButton *>("resumeCarPlay")->click();
+        QCOMPARE(views->currentWidget(), projection);
+        QTRY_VERIFY(!input.isEmpty());
+        QTRY_VERIFY([&] {
+            for (const auto &entry : input)
+                if (QJsonDocument::fromJson(entry.at(0).toString().toUtf8()).object().value("type") == "show-ui") return true;
+            return false;
+        }());
+        QSignalSpy management(&widget, &CarPlayWidget::managementRequested);
+        peer->sendTextMessage("{\"type\":\"host-ui\"}");
+        QTRY_COMPARE(management.count(), 1);
+        QVERIFY(views->currentWidget() != projection);
+        QVERIFY(!client.frame().isNull());
         QCOMPARE(client.frame().size(), QSize(160, 96));
 
         CarPlaySurface surface(client);
         surface.resize(500, 200);
         surface.show();
         QTest::qWait(100);
+        input.clear();
         QTest::mouseClick(&surface, Qt::LeftButton, Qt::NoModifier, QPoint(250, 100));
         QTRY_VERIFY(input.count() >= 2);
         const auto press = QJsonDocument::fromJson(input.at(0).at(0).toString().toUtf8()).object();
@@ -153,6 +249,7 @@ class CarPlayNativeTest : public QObject {
         peer->sendBinaryMessage(QByteArray::fromHex("010100")); // truncated config must be ignored
         client.disconnectReceiver();
         QVERIFY(client.frame().isNull());
+        QTRY_VERIFY(views->currentWidget() != projection);
         peer->deleteLater();
     }
  private:

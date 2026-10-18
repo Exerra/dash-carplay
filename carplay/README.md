@@ -49,19 +49,44 @@ bun run test
 
 1. Set up the Python environment as described in `receiver/linux/README.md`.
 2. Put the Pi and iPhone on the same Wi-Fi LAN (multicast/client communication enabled).
-3. Pair the iPhone in the Pi's Bluetooth settings and approve the code on the phone.
-4. Supply the identity folder containing `offline-mfi/identity.pk8` and
+3. Supply the identity folder containing `offline-mfi/identity.pk8` and
    `offline-mfi/certificate.p7b`. Credentials stay outside source control. The
    workspace's previously extracted `runtime-assets` directory has this layout.
-5. Run the read-only preflight check:
+4. Run the read-only preflight check:
 
 ```sh
 python3 carplay/preflight.py --identity-dir /absolute/path/to/runtime-assets
 ```
 
-6. Open Dash's CarPlay page. Choose that identity folder, enter the Wi-Fi network
-   and password, and optionally enter the iPhone Bluetooth MAC if more than one
-   iPhone is paired. Start CarPlay and approve the prompt on the phone.
+5. For a new installation, enter the identity folder and shared Wi-Fi details in
+   **Advanced setup**. The configured development Pi already has these.
+6. **Add iPhone** guides you through pairing, Wi-Fi and CarPlay approval. Keep the
+   iPhone's Bluetooth settings open and confirm the matching code when prompted;
+   no Bluetooth address needs to be typed. Select a saved phone and choose **Connect**.
+
+## Phones and display
+
+Once the first video frame arrives, the setup screen disappears and CarPlay fills
+the page, like Android Auto. Disconnecting returns to the setup screen.
+While connected, use **Settings → CarPlay → Phones & display** to manage the
+connection. **Return to CarPlay** resumes the picture without disconnecting.
+The **OpenDash** icon on the CarPlay home screen also opens this management screen
+using CarPlay's OEM return action. Its icon reuses Dash's existing logo. This does
+not require installing an iPhone app.
+
+- Save several named iPhones, rename or remove them, and choose which phone to
+  connect. One phone is active at a time. Removing a saved entry keeps its system
+  Bluetooth pairing; the wizard can add it again.
+- Choose 800×480, 1024×600, 1280×720, 1920×1080, 1920×720, or a custom even size
+  between 480 and 3840 pixels per edge. Frame rate can be 30 or 60 fps.
+- **Apply & reconnect** saves display settings and restarts an active connection.
+  With CarPlay stopped, it saves them for the next connection. The default remains
+  800×480 at 30 fps; higher settings still need performance checks on the target.
+
+Phone names, selection and display settings persist in Dash settings. The setup
+wizard performs pairing on the Pi through BlueZ and shows confirmation inside
+Dash; ordinary connection screens do not expose Bluetooth addresses or identity
+paths. Those technical settings remain under **Advanced setup**.
 
 The native page does not save the Wi-Fi password in Dash settings; it passes it to
 the backend's environment for that run. Pairing and generated receiver state live

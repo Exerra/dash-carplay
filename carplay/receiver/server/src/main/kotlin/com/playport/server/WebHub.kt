@@ -135,6 +135,8 @@ class WebHub(
         broadcastJson(ServerMessage(type = "receiver", message = message))
     }
 
+    fun requestHostUi() { broadcastJson(ServerMessage(type = "host-ui")) }
+
     fun setVideoCodec(type: Int, codec: VideoCodec) {
         codecsByStream[type] = codec
     }

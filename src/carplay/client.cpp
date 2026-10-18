@@ -115,6 +115,8 @@ void CarPlayClient::textMessage(const QString &data) {
         if (!active) stopMedia();
         else setNightMode(night_);
         emit statusChanged(active ? "CarPlay connected" : "Receiver ready. Waiting for iPhone.");
+    } else if (type == "host-ui") {
+        emit hostUiRequested();
     } else if (type == "mic" && object.value("micActive").toBool()) {
         emit statusChanged("Microphone uplink is not enabled in this prototype.");
     } else if (type == "receiver") {

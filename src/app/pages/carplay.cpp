@@ -12,6 +12,7 @@ void CarPlayPage::init() {
     layout->setContentsMargins(0, 0, 0, 0);
     auto *widget = new CarPlayWidget(this);
     layout->addWidget(widget);
+    connect(widget, &CarPlayWidget::managementRequested, this, [this] { arbiter.set_curr_page(this); });
     connect(&arbiter, &Arbiter::mode_changed, widget, [widget](Session::Theme::Mode mode) {
         widget->setNightMode(mode == Session::Theme::Dark);
     });

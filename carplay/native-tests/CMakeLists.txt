@@ -3,7 +3,7 @@ project(dash_carplay_tests LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_AUTOMOC ON)
 enable_testing()
-find_package(Qt5 5.12 REQUIRED COMPONENTS Core Gui Widgets WebSockets Test)
+find_package(Qt5 5.12 REQUIRED COMPONENTS Core Gui Widgets WebSockets Test Bluetooth DBus)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0 gstreamer-video-1.0)
 get_filename_component(DASH_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
@@ -12,14 +12,20 @@ add_executable(carplay-native-test
     ${DASH_ROOT}/src/carplay/client.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
     ${DASH_ROOT}/src/carplay/widget.cpp
+    ${DASH_ROOT}/src/carplay/phones.cpp
+    ${DASH_ROOT}/src/carplay/phone_wizard.cpp
+    ${DASH_ROOT}/src/carplay/pairing_agent.cpp
     ${DASH_ROOT}/include/carplay/client.hpp
     ${DASH_ROOT}/include/carplay/surface.hpp
-    ${DASH_ROOT}/include/carplay/widget.hpp)
+    ${DASH_ROOT}/include/carplay/widget.hpp
+    ${DASH_ROOT}/include/carplay/phones.hpp
+    ${DASH_ROOT}/include/carplay/pairing_agent.hpp
+    ${DASH_ROOT}/include/carplay/phone_wizard.hpp)
 target_compile_definitions(carplay-native-test PRIVATE DASH_CARPLAY
     DASH_CARPLAY_RUNNER="${DASH_ROOT}/carplay/run.sh"
     DASH_CARPLAY_IDENTITY_DIR="${DASH_ROOT}/carplay/runtime/identity")
 target_include_directories(carplay-native-test PRIVATE ${DASH_ROOT}/include)
-target_link_libraries(carplay-native-test PRIVATE Qt5::Widgets Qt5::WebSockets Qt5::Test PkgConfig::GST)
+target_link_libraries(carplay-native-test PRIVATE Qt5::Widgets Qt5::WebSockets Qt5::Bluetooth Qt5::DBus Qt5::Test PkgConfig::GST)
 add_test(NAME carplay-native COMMAND carplay-native-test)
 set(CARPLAY_TEST_ENV "QT_QPA_PLATFORM=offscreen")
 if(APPLE)

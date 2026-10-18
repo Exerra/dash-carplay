@@ -1,6 +1,8 @@
 package com.playport.server
 
 import com.shilapi.xcertplay.airplay.AirPlayConfig
+import com.shilapi.xcertplay.airplay.AirPlayIcon
+import com.shilapi.xcertplay.airplay.AirPlayInfoPlist
 import com.shilapi.xcertplay.airplay.AirPlayContact
 import com.shilapi.xcertplay.airplay.AirPlayDeviceInfo
 import com.shilapi.xcertplay.airplay.AirPlayDisplayConfig
@@ -75,6 +77,8 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
     @Volatile private var lastBootstrapAt = System.currentTimeMillis()
     private val closed = AtomicBoolean(false)
     private val handoff = WirelessHandoff()
+    private val oemIcons = listOf(AirPlayIcon(200, 200,
+        checkNotNull(javaClass.getResourceAsStream("/opendash.png")) { "OpenDash return icon is missing" }.use { it.readBytes() }))
 
     val airPlayConfig: AirPlayConfig
         get() = AirPlayConfig(
@@ -98,6 +102,7 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
             manufacturer = config.manufacturer,
             model = config.model,
             oemLabel = config.deviceName,
+            icons = oemIcons,
         )
 
     private val listener = object : AirPlaySessionListener {
@@ -122,6 +127,13 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
 
         override fun onTransportError(message: String) {
             log.warn("AirPlay transport error: {}", message)
+        }
+
+        override fun onHostUiRequested(session: AirPlaySession) {
+            if (activeSession === session) {
+                log.info("iPhone requested OpenDash controls")
+                hub.requestHostUi()
+            }
         }
 
         override fun onCommand(session: AirPlaySession, type: String, params: Map<String, Any?>) {
@@ -238,6 +250,10 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
                 "siri" -> session.invokeSiri()
                 "telephony" -> message.telephony?.let(session::sendTelephony)
                 "night" -> message.night?.let(session::setNightMode)
+                "show-ui" -> {
+                    session.sendCommand(mapOf("type" to "showUI", "params" to mapOf("uuid" to AirPlayInfoPlist.MAIN_UUID)))
+                    bridge.requestKeyFrame(110)
+                }
             }
         } catch (error: Exception) {
             log.warn("Input routing failed type={}: {}", message.type, error.message)
