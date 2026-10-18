@@ -3,6 +3,7 @@
 #include "carplay/surface.hpp"
 #include "carplay/phone_wizard.hpp"
 #include "carplay/touch_ui.hpp"
+#include "app/receiver_settings.hpp"
 #include <QButtonGroup>
 #include <QDialog>
 #include <QDir>
@@ -36,6 +37,7 @@ void CarPlayWidget::init() {
     client_ = new CarPlayClient(this);
     stateDirectory_ = qEnvironmentVariable("XDG_STATE_HOME", QDir::homePath() + "/.local/state") + "/opendash/carplay";
     QSettings saved;
+    receiverEnabled_ = Receivers::carplayEnabled();
     pages_ = new QStackedWidget(this); pages_->setObjectName("carplayViews"); layout->addWidget(pages_);
     auto *content = new QWidget(pages_); content->setObjectName("carplayManagement");
     setup_ = content; setProperty("carplayDark", true);
@@ -204,24 +206,36 @@ void CarPlayWidget::init() {
     });
     connect(start_, &QPushButton::clicked, this, &CarPlayWidget::connectSelectedPhone);
     connect(stop_, &QPushButton::clicked, this, [this] { restartPending_ = false; stopReceiver(); });
-    connect(client_, &CarPlayClient::statusChanged, status_, &QLabel::setText);
+    connect(client_, &CarPlayClient::statusChanged, this, [this](const QString &message) {
+        if (receiverEnabled_) status_->setText(message);
+    });
     connect(&process_, &QProcess::readyReadStandardOutput, this, [this] { process_.readAllStandardOutput(); });
     connect(&process_, &QProcess::readyReadStandardError, this, [this] { process_.readAllStandardError(); });
-    connect(&process_, &QProcess::started, this, [this] { start_->setEnabled(true); });
+    connect(&process_, &QProcess::started, this, [this] {
+        start_->setEnabled(receiverEnabled_);
+        if (!receiverEnabled_) stopReceiver();
+    });
     connect(&process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
-            restartPending_ = false; status_->setText("CarPlay could not start. Check Setup or the receiver installation.");
-            start_->setEnabled(true); stop_->setEnabled(false); poll_.stop();
+            restartPending_ = false;
+            status_->setText(receiverEnabled_ ? "CarPlay could not start. Check Setup or the receiver installation." :
+                "CarPlay receiver is disabled. Enable it in Settings → Receivers.");
+            start_->setEnabled(receiverEnabled_); stop_->setEnabled(false); poll_.stop();
         }
     });
     connect(&process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this](int code, QProcess::ExitStatus) {
-        poll_.stop(); client_->disconnectReceiver(); start_->setEnabled(true); stop_->setEnabled(false);
+        poll_.stop(); client_->disconnectReceiver(); start_->setEnabled(receiverEnabled_); stop_->setEnabled(false);
+        if (!receiverEnabled_) { status_->setText("CarPlay receiver is disabled. Enable it in Settings → Receivers."); return; }
         if (restartPending_) { restartPending_ = false; QTimer::singleShot(0, this, &CarPlayWidget::startReceiver); }
         else status_->setText(code == 0 ? "CarPlay disconnected. Choose an iPhone to reconnect." : "CarPlay receiver stopped. Try connecting again; Setup has the receiver details.");
     });
     poll_.setInterval(500);
     connect(&poll_, &QTimer::timeout, this, [this] { client_->connectFile(stateDirectory_ + "/connection.json"); });
-    if (qEnvironmentVariableIntValue("CARPLAY_AUTOSTART") == 1 && phones_->count())
+    if (!receiverEnabled_) {
+        start_->setEnabled(false);
+        status_->setText("CarPlay receiver is disabled. Enable it in Settings → Receivers.");
+    }
+    if (receiverEnabled_ && qEnvironmentVariableIntValue("CARPLAY_AUTOSTART") == 1 && phones_->count())
         QTimer::singleShot(0, this, &CarPlayWidget::startReceiver);
 }
 
@@ -253,6 +267,7 @@ void CarPlayWidget::saveDisplay() {
 }
 
 void CarPlayWidget::connectSelectedPhone() {
+    if (!receiverEnabled_) { status_->setText("Enable the CarPlay receiver in Settings → Receivers first."); return; }
     if (androidAutoActive_) { status_->setText("Disconnect Android Auto before starting CarPlay."); return; }
     if (!validAddress(phones_->currentData().toString())) { status_->setText("Choose a saved iPhone or use Add iPhone first."); return; }
     if ((width_->value() % 2) || (height_->value() % 2)) { status_->setText("Resolution width and height must be even numbers."); return; }
@@ -262,6 +277,7 @@ void CarPlayWidget::connectSelectedPhone() {
 }
 
 void CarPlayWidget::startReceiver() {
+    if (!receiverEnabled_) return;
     if (process_.state() != QProcess::NotRunning) return;
     if (androidAutoActive_) { status_->setText("Disconnect Android Auto before starting CarPlay."); return; }
     if (!validAddress(phones_->currentData().toString())) { status_->setText("Add an iPhone to start CarPlay."); return; }
@@ -288,6 +304,21 @@ void CarPlayWidget::stopReceiver() {
     if (pid) QTimer::singleShot(3000, this, [this, pid] {
         if (process_.processId() == pid && process_.state() != QProcess::NotRunning) process_.kill();
     });
+}
+
+void CarPlayWidget::setReceiverEnabled(bool enabled) {
+    const bool wasEnabled = receiverEnabled_; receiverEnabled_ = enabled;
+    QSettings saved; saved.setValue("Receivers/carplay_enabled", enabled); saved.sync();
+    if (!enabled) {
+        restartPending_ = false; stopReceiver(); start_->setEnabled(false); stop_->setEnabled(false);
+        status_->setText("CarPlay receiver is disabled. Enable it in Settings → Receivers.");
+    } else if (!wasEnabled) {
+        start_->setEnabled(true); status_->setText("CarPlay receiver enabled. Choose an iPhone to connect.");
+        if (qEnvironmentVariableIntValue("CARPLAY_AUTOSTART") == 1 && phones_->count()) {
+            if (process_.state() != QProcess::NotRunning) restartPending_ = true;
+            else QTimer::singleShot(0, this, &CarPlayWidget::startReceiver);
+        }
+    }
 }
 
 void CarPlayWidget::setAndroidAutoActive(bool active) {

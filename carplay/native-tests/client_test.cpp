@@ -4,10 +4,13 @@
 #include "carplay/pairing_agent.hpp"
 #include "carplay/phone_wizard.hpp"
 #include "carplay/touch_ui.hpp"
+#include "app/receiver_settings.hpp"
+#include <QCheckBox>
 #include <QDialog>
 #include <QDir>
 #include <QFile>
 #include <QFocusEvent>
+#include <QVBoxLayout>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QSettings>
@@ -31,6 +34,7 @@ class CarPlayNativeTest : public QObject {
     void init() {
         QSettings settings;
         settings.remove("CarPlay");
+        settings.remove("Receivers");
         settings.setValue("CarPlay/bluetooth_address", "00:11:22:33:44:55");
     }
 
@@ -56,6 +60,48 @@ class CarPlayNativeTest : public QObject {
         widget.setAndroidAutoActive(true);
         QTRY_VERIFY_WITH_TIMEOUT(!stop->isEnabled(), 4000);
         QVERIFY(start->isEnabled());
+    }
+
+    void receiverSettingsAreIndependentAndOnlyAndroidAutoNeedsRestart() {
+        bool carplayEnabled = true;
+        ReceiverSettings panel(true, [&](bool enabled) { carplayEnabled = enabled; });
+        QSignalSpy restart(&panel, &ReceiverSettings::restartRequested);
+        auto *android = panel.findChild<QCheckBox *>("androidAutoReceiverEnabled");
+        auto *carplay = panel.findChild<QCheckBox *>("carplayReceiverEnabled");
+        auto *apply = panel.findChild<QPushButton *>("applyReceivers");
+        QVERIFY(android->isChecked()); QVERIFY(carplay->isChecked());
+        carplay->setChecked(false); apply->click();
+        QVERIFY(!carplayEnabled); QVERIFY(Receivers::androidAutoEnabled()); QVERIFY(!Receivers::carplayEnabled());
+        QCOMPARE(restart.count(), 0);
+        android->setChecked(false); apply->click();
+        QVERIFY(!Receivers::androidAutoEnabled()); QVERIFY(!Receivers::carplayEnabled()); QCOMPARE(restart.count(), 1);
+        ReceiverSettings restored(false, [&](bool enabled) { carplayEnabled = enabled; });
+        QVERIFY(!restored.findChild<QCheckBox *>("androidAutoReceiverEnabled")->isChecked());
+        restored.findChild<QCheckBox *>("carplayReceiverEnabled")->setChecked(true);
+        restored.findChild<QPushButton *>("applyReceivers")->click();
+        QVERIFY(carplayEnabled); QVERIFY(!Receivers::androidAutoEnabled()); QVERIFY(Receivers::carplayEnabled());
+    }
+
+    void disabledCarPlayBlocksAutostartAndManualStartAndStopsAnActiveReceiver() {
+        const auto marker = settingsDirectory_.filePath("receiver-was-started"); QFile::remove(marker);
+        const auto runner = settingsDirectory_.filePath("disabled-receiver");
+        QFile executable(runner); QVERIFY(executable.open(QIODevice::WriteOnly));
+        executable.write(("#!/bin/sh\ntouch '" + marker + "'\nexec sleep 30\n").toUtf8()); executable.close();
+        QVERIFY(executable.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner));
+        QSettings settings; settings.setValue("CarPlay/receiver_command", runner);
+        settings.setValue("Receivers/carplay_enabled", false);
+        const bool hadAutostart = qEnvironmentVariableIsSet("CARPLAY_AUTOSTART");
+        const auto autostart = qgetenv("CARPLAY_AUTOSTART"); qputenv("CARPLAY_AUTOSTART", "1");
+        CarPlayWidget widget;
+        if (hadAutostart) qputenv("CARPLAY_AUTOSTART", autostart); else qunsetenv("CARPLAY_AUTOSTART");
+        auto *start = widget.findChild<QPushButton *>("connectCarPlay");
+        QVERIFY(!start->isEnabled()); start->click(); QTest::qWait(30); QVERIFY(!QFile::exists(marker));
+        widget.setAndroidAutoActive(true); widget.setAndroidAutoActive(false);
+        QVERIFY(!start->isEnabled());
+        widget.setReceiverEnabled(true); start->click(); QTRY_VERIFY(QFile::exists(marker));
+        widget.setReceiverEnabled(false); QVERIFY(!widget.phoneActive());
+        QTRY_VERIFY(!widget.findChild<QPushButton *>("stopCarPlay")->isEnabled());
+        QTest::qWait(100); QVERIFY(!start->isEnabled()); QVERIFY(!Receivers::carplayEnabled());
     }
     void selectedPhoneAndResolutionReachTheReceiverAndPersist() {
         const auto capture = settingsDirectory_.filePath("environment");
@@ -332,6 +378,11 @@ class CarPlayNativeTest : public QObject {
         selectSection("Setup");
         widget.setNightMode(false); capture(&widget, "setup-light-800");
         widget.resize(1920,1080); selectSection("Phones"); capture(&widget, "phones-1920");
+        QDialog receiverHost; receiverHost.resize(800,480);
+        auto *receiverLayout = new QVBoxLayout(&receiverHost); receiverLayout->setContentsMargins(0,0,0,0);
+        receiverLayout->addWidget(new ReceiverSettings(true, {}, &receiverHost)); receiverHost.show();
+        CarPlayTouch::theme(&receiverHost, true); capture(&receiverHost, "receivers-dark-800");
+        CarPlayTouch::theme(&receiverHost, false); capture(&receiverHost, "receivers-light-800");
     }
 
     void decodesVideoAndMapsTouchInsideLetterboxing() {

@@ -105,6 +105,25 @@ token file has owner-only permissions. The frontend initially requests H.264,
 800×480 at 30 fps. Decoder output uses a bounded latest-frame Qt image; benchmark
 this copy-based renderer on the actual Pi before increasing resolution.
 
+## Receiver switches
+
+**Settings → Receivers** has independent Android Auto and CarPlay switches. Both
+default to enabled and the selections persist across restarts. Layout page
+visibility is separate: hiding a page does not turn its receiver off.
+
+CarPlay changes take effect with **Apply**, stopping the receiver, automatic
+reconnection and discovery. Its saved phones, identity and display settings are
+kept. Disabled CarPlay cannot be started with Connect or the launcher's autostart.
+
+Android Auto changes use **Apply & restart Dash**. Only Dash restarts, preserving
+its launcher environment and systemd process identity; the Pi does not reboot.
+When disabled, the OpenAuto worker is not created, so no Android Auto USB probing,
+TCP listener or wireless Bluetooth bootstrap starts. A full restart is needed
+because the current OpenAuto dependency retains listeners after `App::stop()`.
+
+The switches control Dash's receivers; the system's shared Wi-Fi hotspot and
+Bluetooth radio stay available for the other receiver and ordinary Bluetooth use.
+
 ## Shared phone controls
 
 In **Settings → Actions**, the former Android Auto actions are now named **Phone**

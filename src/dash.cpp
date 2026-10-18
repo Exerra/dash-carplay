@@ -1,13 +1,22 @@
 #include <QApplication>
 #include <QStringList>
 #include <QWindow>
+#include <cstdio>
+#include <cstdlib>
+#include <dirent.h>
+#include <fcntl.h>
+#include <string>
+#include <unistd.h>
+#include <vector>
 
 #include "app/window.hpp"
 #include "app/action.hpp"
+#include "app/receiver_settings.hpp"
 
-int main(int argc, char *argv[])
+static int runDash(int argc, char *argv[], QByteArray &executable)
 {
     QApplication dash(argc, argv);
+    executable = QCoreApplication::applicationFilePath().toLocal8Bit();
 
     dash.setOrganizationName("openDsh");
     dash.setApplicationName("dash");
@@ -54,4 +63,39 @@ int main(int argc, char *argv[])
     splash.finish(&window);
 
     return dash.exec();
+}
+
+int main(int argc, char *argv[])
+{
+    std::vector<std::string> arguments;
+    for (int i = 0; i < argc; ++i) arguments.emplace_back(argv[i]);
+    QByteArray executable;
+    const int result = runDash(argc, argv, executable);
+    if (result != Receivers::RestartExitCode) return result;
+
+    // Qt and receiver workers have shut down. Keep the same PID for systemd and
+    // preserve the launcher's environment, but never inherit old receiver sockets.
+    if (DIR *directory = opendir("/proc/self/fd")) {
+        while (auto *entry = readdir(directory)) {
+            char *end = nullptr;
+            const long descriptor = std::strtol(entry->d_name, &end, 10);
+            if (*end || descriptor < 3) continue;
+            const int flags = fcntl(int(descriptor), F_GETFD);
+            if (flags >= 0) fcntl(int(descriptor), F_SETFD, flags | FD_CLOEXEC);
+        }
+        closedir(directory);
+    } else {
+        const long limit = sysconf(_SC_OPEN_MAX);
+        for (int descriptor = 3; descriptor < limit; ++descriptor) {
+            const int flags = fcntl(descriptor, F_GETFD);
+            if (flags >= 0) fcntl(descriptor, F_SETFD, flags | FD_CLOEXEC);
+        }
+    }
+    arguments[0] = executable.constData();
+    std::vector<char *> pointers;
+    for (auto &argument : arguments) pointers.push_back(const_cast<char *>(argument.c_str()));
+    pointers.push_back(nullptr);
+    execv(executable.constData(), pointers.data());
+    std::perror("Could not restart Dash");
+    return EXIT_FAILURE;
 }

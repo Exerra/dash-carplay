@@ -4,7 +4,7 @@
 AAHandler::AAHandler() :
 QObject()
 {
-
+    this->setServiceFactory(nullptr);
 }
 
 AAHandler::~AAHandler()

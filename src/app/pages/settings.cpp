@@ -16,6 +16,7 @@
 #include "app/action.hpp"
 #include "app/config.hpp"
 #include "app/session.hpp"
+#include "app/receiver_settings.hpp"
 #include "app/window.hpp"
 #include "app/pages/settings.hpp"
 #include "app/services/server.hpp"
@@ -38,6 +39,15 @@ void SettingsPage::init()
     this->addTab(new MainSettingsTab(this->arbiter), "Main");
     this->addTab(new LayoutSettingsTab(this->arbiter), "Layout");
     this->addTab(new BluetoothSettingsTab(this->arbiter, this), "Bluetooth");
+    auto *receivers = new ReceiverSettings(this->arbiter.layout().openauto_page->receiverEnabled(), [this](bool enabled) {
+#ifdef DASH_CARPLAY
+        if (auto *widget = this->arbiter.window()->findChild<CarPlayWidget *>()) widget->setReceiverEnabled(enabled);
+#else
+        Q_UNUSED(enabled);
+#endif
+    }, this);
+    connect(receivers, &ReceiverSettings::restartRequested, this, [] { QCoreApplication::exit(Receivers::RestartExitCode); });
+    this->addTab(receivers, "Receivers");
 #ifdef DASH_CARPLAY
     auto *carplay = new QWidget(this);
     auto *carplayLayout = new QVBoxLayout(carplay);

@@ -10,6 +10,8 @@ get_filename_component(DASH_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
 add_executable(carplay-native-test
     client_test.cpp
     ${DASH_ROOT}/src/app/phone_controls.cpp
+    ${DASH_ROOT}/src/app/receiver_settings.cpp
+    ${DASH_ROOT}/include/app/receiver_settings.hpp
     ${DASH_ROOT}/src/carplay/client.cpp
     ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp

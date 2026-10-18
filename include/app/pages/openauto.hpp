@@ -76,6 +76,7 @@ class OpenAutoPage : public QStackedWidget, public Page {
    public:
     OpenAutoPage(Arbiter &arbiter, QWidget *parent = nullptr);
     void init() override;
+    bool receiverEnabled() const { return this->worker != nullptr; }
 
    protected:
     void resizeEvent(QResizeEvent *event);
@@ -111,7 +112,7 @@ class OpenAutoPage : public QStackedWidget, public Page {
     QWidget *connect_msg();
 
     Config *config;
-    OpenAutoFrame *frame;
-    OpenAutoWorker *worker;
+    OpenAutoFrame *frame = nullptr;
+    OpenAutoWorker *worker = nullptr;
     const QString connected_icon_name;
 };

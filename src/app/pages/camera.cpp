@@ -18,6 +18,8 @@ CameraPage::CameraPage(Arbiter &arbiter, QWidget *parent)
 
 void CameraPage::init()
 {
+    // The camera also uses QtGStreamer when the Android Auto worker is disabled.
+    QGst::init(nullptr, nullptr);
     this->player = new QMediaPlayer(this);
     this->local_cam = nullptr;
     this->local_index = 0;
@@ -46,8 +48,18 @@ void CameraPage::init()
         this->connected=true;
     });
 
-    videoContainer_ = nullptr;
-    videoWidget_ = nullptr;
+    // Create the Quick renderer before the top-level window is shown. Without
+    // Android Auto there is otherwise no Quick widget until a camera connects,
+    // which changes the Wayland window's rendering backend while it is visible.
+    videoContainer_ = this->local_video_widget;
+    videoWidget_ = new QQuickWidget(videoContainer_);
+    surface_ = new QGst::Quick::VideoSurface;
+    surface_->setParent(videoWidget_);
+    videoWidget_->rootContext()->setContextProperty(QLatin1String("videoSurface"), surface_);
+    videoWidget_->setSource(QUrl("qrc:/camera_video.qml"));
+    videoWidget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
+    videoSink_ = surface_->videoSink();
+    videoWidget_->hide();
 
     // Write camera_overlay to /tmp so that we can later point gstreamer to it
     if (QFile::exists("/tmp/dash_camera_overlay.svg"))
@@ -65,14 +77,7 @@ void CameraPage::showEvent(QShowEvent *event)
 
 void CameraPage::init_gstreamer_pipeline(std::string desc, bool sync)
 {
-    videoWidget_ = new QQuickWidget(videoContainer_);
-
-    surface_ = new QGst::Quick::VideoSurface;
-    videoWidget_->rootContext()->setContextProperty(QLatin1String("videoSurface"), surface_);
-    videoWidget_->setSource(QUrl("qrc:/camera_video.qml"));
-    videoWidget_->setResizeMode(QQuickWidget::SizeRootObjectToView);
-
-    videoSink_ = surface_->videoSink();
+    videoWidget_->setParent(videoContainer_);
 
     GError *error = nullptr;
     std::string pipeline = desc;

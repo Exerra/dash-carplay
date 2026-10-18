@@ -44,6 +44,12 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   press/release messages preserve held buttons; legacy/browser taps still work.
 - Android Auto priority guard (block CarPlay start while AA is active; stop the
   CarPlay receiver if AA connects).
+- Settings → Receivers provides independent persistent receiver switches.
+  CarPlay applies live and blocks manual/automatic starts while disabled.
+  Android Auto applies via a Dash restart and skips worker creation entirely,
+  including its USB, TCP and Bluetooth listeners. Layout visibility stays separate.
+  The camera initializes QtGStreamer independently, so disabling Android Auto
+  does not remove the camera's required type-system initialization.
 - Linux BlueZ iAP2 bridge, adapter/device selection and orderly process shutdown.
   Protocol transport preserves byte ordering and has bounded buffering.
 - Linux Wi-Fi channel discovery, use of the physical Bluetooth adapter address,
@@ -67,6 +73,7 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 | Wizard steps, duplicate discoveries and pairing-agent phone scoping | Passed |
 | Touch selector, keyboard accept/cancel and resolution keypad validation | Passed |
 | Shared phone action routing, AA priority and release ownership | Passed |
+| Independent receiver settings, restart signaling and disabled CarPlay lifecycle | Passed on Mac and Pi |
 | Native control IPC, simultaneous buttons, wheel, focus loss and session reset | Passed |
 | Rendered management, wizard and keyboards at 800×480 in both themes | Inspected |
 | Bundled OEM PNG and its /info advertisement | Passed |
@@ -84,6 +91,17 @@ components. The complete Dash executable was not built here: its existing
 Linux-only Android Auto/BlueZ dependency stack still needs the target environment.
 
 ## Verified on the Pi
+
+- Receiver enablement was checked in all four combinations: TCP 5000 was
+  present only with Android Auto enabled, and CarPlay RTSP 7000 only with
+  CarPlay enabled. Both listeners were absent with both disabled. Settings
+  persisted across Dash starts; applying an Android Auto change also restarted
+  Dash successfully without changing its systemd PID. Final development settings
+  are Android Auto off / CarPlay on, with real iPhone video reconnected.
+- Disabling Android Auto exposed camera dependencies on QtGStreamer setup and
+  early Qt Quick renderer creation. The camera now owns both initialization
+  steps. The user confirmed a normal USB webcam picture after the fix with
+  Android Auto disabled; Dash stayed running and CarPlay remained available.
 
 - The CarPlay sidebar icon and first-page order were built and visually checked
   on the Pi. Dash opened directly into the reconnected CarPlay session, with the

@@ -1,6 +1,7 @@
 #include "app/pages/openauto.hpp"
 
 #include "app/config.hpp"
+#include "app/receiver_settings.hpp"
 #include "app/widgets/progress.hpp"
 #include "app/window.hpp"
 #include "DashLog.hpp"
@@ -424,7 +425,8 @@ void OpenAutoPage::init()
     this->frame = new OpenAutoFrame(this);
 
     std::function<void(bool)> callback = [frame = this->frame](bool active) { frame->toggle(active); };
-    this->worker = new OpenAutoWorker(callback, this->arbiter.theme().mode == Session::Theme::Dark, frame, this->arbiter);
+    if (Receivers::androidAutoEnabled())
+        this->worker = new OpenAutoWorker(callback, this->arbiter.theme().mode == Session::Theme::Dark, frame, this->arbiter);
 
     connect(this->frame, &OpenAutoFrame::toggle, [this](bool enable){
         this->setCurrentIndex(enable ? 1 : 0);
@@ -451,8 +453,8 @@ void OpenAutoPage::init()
 void OpenAutoPage::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    this->frame->resize(this->size());
-    this->worker->update_size();
+    if (this->frame) this->frame->resize(this->size());
+    if (this->worker) this->worker->update_size();
 }
 
 QWidget *OpenAutoPage::connect_msg()
@@ -461,7 +463,9 @@ QWidget *OpenAutoPage::connect_msg()
     QVBoxLayout *layout = new QVBoxLayout(widget);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    QLabel *label = new QLabel("Connect Device to Start Android Auto", widget);
+    QLabel *label = new QLabel(this->receiverEnabled() ? "Connect Device to Start Android Auto" :
+        "Android Auto receiver is disabled. Enable it in Settings → Receivers.", widget);
+    label->setWordWrap(true);
     label->setAlignment(Qt::AlignCenter);
 
     QHBoxLayout *layout2 = new QHBoxLayout();
