@@ -51,9 +51,17 @@ void SettingsPage::init()
 #ifdef DASH_CARPLAY
     auto *carplay = new QWidget(this);
     auto *carplayLayout = new QVBoxLayout(carplay);
-    auto *description = new QLabel("Manage saved iPhones, add a phone, or change CarPlay resolution and frame rate.", carplay);
+    auto *description = new QLabel("Manage iPhones, display settings, speakers and microphone options.", carplay);
     description->setWordWrap(true); carplayLayout->addWidget(description);
     auto *manage = new QPushButton("Phones && display", carplay); manage->setMinimumHeight(44); carplayLayout->addWidget(manage); carplayLayout->addStretch();
+    auto *audioSettings = new QPushButton("Audio", carplay); audioSettings->setMinimumHeight(56); carplayLayout->insertWidget(2, audioSettings);
+    connect(audioSettings, &QPushButton::clicked, this, [this] {
+        if (auto *widget = this->arbiter.window()->findChild<CarPlayWidget *>()) {
+            widget->showAudioSettings();
+            for (auto *page : this->arbiter.layout().pages())
+                if (page->name() == "CarPlay") { this->arbiter.set_curr_page(page); break; }
+        }
+    });
     connect(manage, &QPushButton::clicked, this, [this] {
         if (auto *widget = this->arbiter.window()->findChild<CarPlayWidget *>()) {
             widget->showSetup();

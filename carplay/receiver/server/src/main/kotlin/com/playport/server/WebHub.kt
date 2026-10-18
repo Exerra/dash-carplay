@@ -109,9 +109,9 @@ class WebHub(
     /** Browser microphone payloads: (isOpus, payload). */
     @Volatile var onMicrophoneData: ((Boolean, ByteArray) -> Unit)? = null
 
-    fun microphoneRequested(uplink: MicUplink) {
-        broadcastJson(
-            ServerMessage(
+    @Volatile private var currentMicrophone: MicUplink? = null
+
+    private fun microphoneMessage(uplink: MicUplink) = ServerMessage(
                 type = "mic",
                 deviceName = config.deviceName,
                 micActive = true,
@@ -120,11 +120,15 @@ class WebHub(
                 micCodec = uplink.codec,
                 micSamplesPerPacket = uplink.samplesPerPacket,
                 micBitrate = uplink.bitrate,
-            ),
-        )
+            )
+
+    fun microphoneRequested(uplink: MicUplink) {
+        currentMicrophone = uplink
+        broadcastJson(microphoneMessage(uplink))
     }
 
     fun microphoneStopped() {
+        currentMicrophone = null
         broadcastJson(ServerMessage(type = "mic", deviceName = config.deviceName, micActive = false))
     }
 
@@ -325,6 +329,9 @@ class WebHub(
                     }
                     audioFormatByStream.forEach { (type, format) ->
                         client.channel.trySend(Frame.Binary(true, Wire.audioConfig(type, format)))
+                    }
+                    currentMicrophone?.let { uplink ->
+                        client.channel.trySend(Frame.Text(json.encodeToString(ServerMessage.serializer(), microphoneMessage(uplink))))
                     }
                     configByStream.keys.forEach { streamType -> onViewerJoined?.invoke(streamType) }
                     for (frame in incoming) {

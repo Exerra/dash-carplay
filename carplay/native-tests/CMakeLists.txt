@@ -14,6 +14,10 @@ add_executable(carplay-native-test
     ${DASH_ROOT}/include/app/receiver_settings.hpp
     ${DASH_ROOT}/src/carplay/client.cpp
     ${DASH_ROOT}/src/carplay/audio_output.cpp
+    ${DASH_ROOT}/src/carplay/audio_settings.cpp
+    ${DASH_ROOT}/src/carplay/microphone.cpp
+    ${DASH_ROOT}/include/carplay/audio_settings.hpp
+    ${DASH_ROOT}/include/carplay/microphone.hpp
     ${DASH_ROOT}/src/carplay/video_frame.cpp
     ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp
@@ -38,6 +42,7 @@ add_test(NAME carplay-native COMMAND carplay-native-test)
 add_executable(carplay-media-benchmark media_benchmark.cpp
     ${DASH_ROOT}/src/carplay/client.cpp ${DASH_ROOT}/src/carplay/controls.cpp
     ${DASH_ROOT}/src/carplay/audio_output.cpp
+    ${DASH_ROOT}/src/carplay/microphone.cpp ${DASH_ROOT}/include/carplay/microphone.hpp
     ${DASH_ROOT}/src/carplay/video_frame.cpp
     ${DASH_ROOT}/src/carplay/surface.cpp ${DASH_ROOT}/src/app/phone_controls.cpp
     ${DASH_ROOT}/include/carplay/client.hpp ${DASH_ROOT}/include/carplay/surface.hpp)

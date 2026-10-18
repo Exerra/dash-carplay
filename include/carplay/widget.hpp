@@ -20,6 +20,7 @@ class CarPlayWidget : public QWidget {
     void setAccentColor(const QColor &color);
     void setVolume(int percent) { client_->setVolume(percent); }
     void showSetup();
+    void showAudioSettings();
     void setReceiverEnabled(bool enabled);
     bool receiverEnabled() const { return receiverEnabled_; }
     bool phoneActive() const { return receiverEnabled_ && !androidAutoActive_ && client_->sessionActive(); }
@@ -55,6 +56,7 @@ class CarPlayWidget : public QWidget {
     QPushButton *resume_ = nullptr;
     QPushButton *start_ = nullptr;
     QPushButton *stop_ = nullptr;
+    QPushButton *audioTab_ = nullptr;
     QString stateDirectory_;
     void startReceiver();
     void stopReceiver();

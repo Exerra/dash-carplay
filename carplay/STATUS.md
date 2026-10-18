@@ -28,8 +28,11 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
   reject stale UDP packets while preserving the session/microphone. Digital-monitor
   Pause tests settled at 74–88 ms without an audible return; the user confirmed
   clean Pause/Resume, track changes and lyrics. See `AUDIO_LATENCY.md` for limits.
-- Silent PCM/Opus input for audio-device compatibility without capturing a
-  microphone. Real voice input, calls and Siri conversations remain unsupported.
+- Persistent Audio settings: device selection, four output-buffer profiles,
+  separate music/voice levels, speaker test, and silent/phone/real microphone modes.
+  USB PCM/Opus capture is implemented. The user confirmed HDMI sound, level/apply
+  controls, and Siri hearing/answering through a RØDE NT-USB Mini. Calls remain
+  unverified; echo cancellation is not implemented.
 - Receiver start/stop from Dash, authenticated loopback IPC and a private runtime
   connection file. Wi-Fi passwords are passed through the process environment.
 - Projection fills the page after the first decoded frame; setup returns on
@@ -217,8 +220,8 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
 4. Measure higher resolutions/60 fps on the Pi; the 800×480/30 fps mode remains
    the default, and exact selected dimensions/rate are verified in receiver-launch tests.
 
-Real microphone capture/Siri conversations, echo cancellation, phone-call acceptance,
-automatic AP management inside Dash and wired USB are outside this first prototype.
+Echo cancellation, automatic AP management inside Dash and wired USB remain
+unimplemented. Phone-call acceptance and sustained two-way call audio still need testing.
 The current receiver uses an OS-managed Wi-Fi LAN or hotspot. The initial mode is
 H.264, 800×480 at 30 fps.
 

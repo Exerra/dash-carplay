@@ -45,9 +45,16 @@ void stopPipeline(GstElement *&pipeline, GstElement *&source) {
 }
 
 CarPlayClient::CarPlayClient(QObject *parent) : QObject(parent) {
+    audioSettings_ = CarPlayAudio::loadSettings();
     GError *error = nullptr;
     enabled_ = gst_init_check(nullptr, nullptr, &error);
     if (error) g_error_free(error);
+    microphone_ = new CarPlayMicrophone(this);
+    connect(microphone_, &CarPlayMicrophone::statusChanged, this, &CarPlayClient::audioStatusChanged);
+    connect(microphone_, &CarPlayMicrophone::packetReady, this, [this](const QByteArray &packet) {
+        if (socket_.state() == QAbstractSocket::ConnectedState && socket_.bytesToWrite() < 65536)
+            socket_.sendBinaryMessage(packet);
+    });
     connect(&socket_, &QWebSocket::binaryMessageReceived, this, &CarPlayClient::binaryMessage);
     connect(&socket_, &QWebSocket::textMessageReceived, this, &CarPlayClient::textMessage);
     connect(&socket_, &QWebSocket::connected, this, [this] {
@@ -99,10 +106,84 @@ void CarPlayClient::setNightMode(bool night) {
 
 void CarPlayClient::setVolume(int percent) {
     volume_ = qBound(0, percent, 100) / 100.0;
+    updateAudioVolumes();
+}
+
+void CarPlayClient::updateAudioVolumes() {
     for (const auto &audio : audio_) {
         GstElement *volume = gst_bin_get_by_name(GST_BIN(audio.pipeline), "volume");
-        if (volume) { g_object_set(volume, "volume", volume_, nullptr); gst_object_unref(volume); }
+        const double level = volume_ * (audio.music ? audioSettings_.music : audioSettings_.voice) / 100.0;
+        if (volume) { g_object_set(volume, "volume", level, nullptr); gst_object_unref(volume); }
     }
+    if (speakerTest_) {
+        auto *volume = gst_bin_get_by_name(GST_BIN(speakerTest_), "volume");
+        if (volume) { g_object_set(volume, "volume", volume_ * audioSettings_.music / 100.0, nullptr); gst_object_unref(volume); }
+    }
+}
+
+void CarPlayClient::setAudioSettings(const CarPlayAudio::Settings &settings) {
+    const bool inputChanged = settings.input != audioSettings_.input || settings.microphoneMode != audioSettings_.microphoneMode;
+    const bool restart = settings.output != audioSettings_.output || settings.buffer != audioSettings_.buffer || audioFallback_;
+    audioSettings_ = settings;
+    audioSettings_.buffer = qBound(40, settings.buffer, 500);
+    audioSettings_.music = qBound(0, settings.music, 100);
+    audioSettings_.voice = qBound(0, settings.voice, 100);
+    if (restart) {
+        stopSpeakerTest(); audioFallback_ = false; rebuildAudio();
+    } else updateAudioVolumes();
+    if (inputChanged) {
+        microphone_->stop();
+        if (audioSettings_.microphoneMode == "real" && microphoneRequest_.value("micActive").toBool())
+            microphone_->start(microphoneRequest_, audioSettings_.input);
+    }
+}
+
+void CarPlayClient::rebuildAudio() {
+    QList<QByteArray> configs;
+    for (const auto &audio : audio_) configs.append(audio.config);
+    for (const auto &config : configs) configureAudio(config);
+}
+
+GstElement *CarPlayClient::audioOutput() {
+    auto *output = CarPlayAudio::createOutput(audioFallback_ ? QString() : audioSettings_.output);
+    if (!output && !audioSettings_.output.isEmpty() && !audioFallback_) {
+        audioFallback_ = true;
+        emit audioStatusChanged("Saved speakers are unavailable. Using the system default.");
+        output = CarPlayAudio::createOutput({});
+    }
+    return output;
+}
+
+bool CarPlayClient::attachAudioOutput(GstElement *pipeline) {
+    auto *output = audioOutput();
+    if (!output) return false;
+    if (!gst_bin_add(GST_BIN(pipeline), output)) { gst_object_unref(output); return false; }
+    auto *volume = gst_bin_get_by_name(GST_BIN(pipeline), "volume");
+    const bool linked = volume && gst_element_link(volume, output);
+    if (volume) gst_object_unref(volume);
+    if (linked) CarPlayAudio::configurePipeline(pipeline, audioSettings_.buffer);
+    return linked;
+}
+
+void CarPlayClient::testSpeakers() {
+    stopSpeakerTest();
+    GError *error = nullptr;
+    speakerTest_ = gst_parse_launch("audiotestsrc wave=sine freq=660 volume=0.15 num-buffers=40 samplesperbuffer=480 "
+        "! audio/x-raw,rate=48000 ! audioconvert ! audioresample ! volume name=volume", &error);
+    if (error || !speakerTest_ || !attachAudioOutput(speakerTest_)) {
+        emit audioStatusChanged(error ? QString::fromUtf8(error->message) : "Could not open the speakers for testing.");
+        if (error) g_error_free(error);
+        stopSpeakerTest(); return;
+    }
+    updateAudioVolumes();
+    emit speakerTestChanged(true);
+    gst_element_set_state(speakerTest_, GST_STATE_PLAYING);
+}
+
+void CarPlayClient::stopSpeakerTest() {
+    if (!speakerTest_) return;
+    gst_element_set_state(speakerTest_, GST_STATE_NULL); gst_object_unref(speakerTest_); speakerTest_ = nullptr;
+    emit speakerTestChanged(false);
 }
 
 QImage CarPlayClient::frame() const {
@@ -129,8 +210,11 @@ void CarPlayClient::textMessage(const QString &data) {
         emit statusChanged(active ? "CarPlay connected" : "Receiver ready. Waiting for iPhone.");
     } else if (type == "host-ui") {
         emit hostUiRequested();
-    } else if (type == "mic" && object.value("micActive").toBool()) {
-        emit statusChanged("Microphone uplink is not enabled in this prototype.");
+    } else if (type == "mic") {
+        microphoneRequest_ = object;
+        if (object.value("micActive").toBool() && audioSettings_.microphoneMode == "real")
+            microphone_->start(object, audioSettings_.input);
+        else microphone_->stop();
     } else if (type == "receiver") {
         emit statusChanged(object.value("message").toString());
     }
@@ -212,17 +296,18 @@ void CarPlayClient::configureAudio(const QByteArray &data) {
     if (!capsName) return;
     GError *error = nullptr;
     AudioPipeline audio;
+    audio.config = data;
+    audio.music = CarPlayAudio::isMusic(type, QString::fromUtf8(data.constData() + 9, quint8(data[8])));
     audio.pipeline = gst_parse_launch(
         "appsrc name=source is-live=true format=time do-timestamp=true block=false "
         "! queue max-size-time=200000000 ! decodebin ! audioconvert ! audioresample "
-        "! volume name=volume ! autoaudiosink", &error);
-    if (error || !audio.pipeline) {
+        "! volume name=volume", &error);
+    if (error || !audio.pipeline || !attachAudioOutput(audio.pipeline)) {
         emit statusChanged(error ? QString::fromUtf8(error->message) : "Audio pipeline unavailable");
         if (error) g_error_free(error);
         stopPipeline(audio.pipeline, audio.source);
         return;
     }
-    CarPlayAudio::configurePipeline(audio.pipeline);
     audio.source = gst_bin_get_by_name(GST_BIN(audio.pipeline), "source");
     if (!audio.source) { stopPipeline(audio.pipeline, audio.source); return; }
     GstCaps *caps = gst_caps_new_simple(capsName, "rate", G_TYPE_INT, rate, "channels", G_TYPE_INT, channels, nullptr);
@@ -239,7 +324,7 @@ void CarPlayClient::configureAudio(const QByteArray &data) {
     gst_app_src_set_caps(GST_APP_SRC(audio.source), caps);
     gst_caps_unref(caps);
     audio_.insert(type, audio);
-    setVolume(int(volume_ * 100));
+    updateAudioVolumes();
     gst_element_set_state(audio.pipeline, GST_STATE_PLAYING);
 }
 
@@ -295,6 +380,8 @@ void CarPlayClient::stopAudio(int type) {
 }
 
 void CarPlayClient::stopMedia() {
+    microphone_->stop(); microphoneRequest_ = {};
+    stopSpeakerTest();
     stopPipeline(video_, videoSource_);
     waitingVideoKeyframe_ = false;
     videoConfig_.clear();
@@ -308,6 +395,17 @@ void CarPlayClient::stopMedia() {
 }
 
 void CarPlayClient::checkPipelines() {
+    microphone_->check();
+    if (speakerTest_) {
+        auto *bus = gst_element_get_bus(speakerTest_);
+        auto *message = gst_bus_pop_filtered(bus, GstMessageType(GST_MESSAGE_ERROR | GST_MESSAGE_EOS));
+        if (message) {
+            if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR)
+                emit audioStatusChanged("Speaker test failed. Check the selected speakers and system volume.");
+            gst_message_unref(message); stopSpeakerTest();
+        }
+        gst_object_unref(bus);
+    }
     if (videoSource_ && videoStats_.isValid() && videoStats_.elapsed() >= 5000) {
         qInfo() << "CarPlay video" << videoStats_.restart() << "ms received=" << videoReceived_
                 << "decoded=" << videoDecoded_.exchange(0)
@@ -317,6 +415,7 @@ void CarPlayClient::checkPipelines() {
     QList<GstElement *> pipelines;
     if (video_) pipelines.append(video_);
     for (const auto &audio : audio_) pipelines.append(audio.pipeline);
+    bool fallback = false;
     for (auto *pipeline : pipelines) {
         GstBus *bus = gst_element_get_bus(pipeline);
         GstMessage *message = gst_bus_pop_filtered(bus, GST_MESSAGE_ERROR);
@@ -324,10 +423,16 @@ void CarPlayClient::checkPipelines() {
             GError *error = nullptr;
             gst_message_parse_error(message, &error, nullptr);
             emit statusChanged(QString("CarPlay media: %1").arg(error ? error->message : "unknown error"));
+            if (pipeline != video_ && !audioSettings_.output.isEmpty() && !audioFallback_) fallback = true;
             if (error) g_error_free(error);
             gst_message_unref(message);
         }
         gst_object_unref(bus);
+    }
+    if (fallback) {
+        audioFallback_ = true;
+        emit audioStatusChanged("Selected speakers disconnected or could not open. Using the system default. Refresh speakers to retry.");
+        rebuildAudio();
     }
 }
 #endif

@@ -3,6 +3,7 @@
 #include "carplay/surface.hpp"
 #include "carplay/phone_wizard.hpp"
 #include "carplay/touch_ui.hpp"
+#include "carplay/audio_settings.hpp"
 #include "app/receiver_settings.hpp"
 #include <QButtonGroup>
 #include <QDialog>
@@ -55,10 +56,11 @@ void CarPlayWidget::init() {
     auto *navigation = new QHBoxLayout(); navigation->setSpacing(8); body->addLayout(navigation);
     auto *sections = new QStackedWidget(content); sections->setObjectName("carplaySections"); settings_ = sections; body->addWidget(sections, 1);
     auto *tabs = new QButtonGroup(this); tabs->setExclusive(true);
-    for (const auto &title : {QString("Phones"), QString("Display"), QString("Setup")}) {
+    for (const auto &title : {QString("Phones"), QString("Display"), QString("Audio"), QString("Setup")}) {
         auto *tab = button(title, "carplaySection", content); tab->setProperty("navigation", true); tab->setCheckable(true);
         const int index = tabs->buttons().size(); tabs->addButton(tab, index); navigation->addWidget(tab, 1);
         if (index == 0) tab->setChecked(true);
+        if (title == "Audio") audioTab_ = tab;
         connect(tab, &QPushButton::clicked, sections, [sections, index] { sections->setCurrentIndex(index); });
     }
     auto addSection = [sections](QWidget *panel) {
@@ -147,6 +149,11 @@ void CarPlayWidget::init() {
         else status_->setText("Display settings saved. Connect an iPhone to use them.");
     });
     apply->setProperty("primary", true); addSection(display);
+
+    auto *audio = new CarPlayAudioSettings(*client_, sections); sections->addWidget(audio);
+    connect(audio, &CarPlayAudioSettings::microphoneModeChanged, this, [this] {
+        if (process_.state() != QProcess::NotRunning) { restartPending_ = true; stopReceiver(); }
+    });
 
     auto *advanced = new QWidget(sections); auto *form = new QFormLayout(advanced);
     form->setContentsMargins(0,4,0,4); form->setSpacing(12); form->setRowWrapPolicy(QFormLayout::WrapAllRows);
@@ -240,6 +247,7 @@ void CarPlayWidget::init() {
 }
 
 void CarPlayWidget::showSetup() { managing_ = true; pages_->setCurrentWidget(setup_); }
+void CarPlayWidget::showAudioSettings() { showSetup(); audioTab_->click(); }
 
 void CarPlayWidget::setNightMode(bool night) {
     client_->setNightMode(night); setProperty("carplayDark", night); updateTheme();
@@ -304,6 +312,7 @@ void CarPlayWidget::startReceiver() {
     environment.insert("CARPLAY_BT_ADDRESS", phones_->currentData().toString());
     environment.insert("CARPLAY_WIDTH", QString::number(width_->value())); environment.insert("CARPLAY_HEIGHT", QString::number(height_->value()));
     environment.insert("CARPLAY_FPS", QString::number(fps_->currentData().toInt()));
+    environment.insert("CARPLAY_MIC_MODE", client_->audioSettings().microphoneMode);
     process_.setProcessEnvironment(environment);
     process_.setProgram(saved.value("CarPlay/receiver_command", QString(DASH_CARPLAY_RUNNER)).toString()); process_.setArguments(QStringList());
     start_->setEnabled(false); stop_->setEnabled(true);

@@ -1,5 +1,6 @@
 #include "carplay/client.hpp"
 #include "carplay/audio_output.hpp"
+#include "carplay/audio_settings.hpp"
 #include "carplay/surface.hpp"
 #include "carplay/widget.hpp"
 #include "carplay/pairing_agent.hpp"
@@ -15,6 +16,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QSettings>
+#include <QSlider>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
@@ -37,6 +39,31 @@ class CarPlayNativeTest : public QObject {
         settings.remove("CarPlay");
         settings.remove("Receivers");
         settings.setValue("CarPlay/bluetooth_address", "00:11:22:33:44:55");
+    }
+
+    void audioSettingsPersistWithoutStartingAReceiverAndKeepVoiceSeparate() {
+        CarPlayWidget widget;
+        auto *client = widget.findChild<CarPlayClient *>(); QVERIFY(client);
+        auto *mode = widget.findChild<QComboBox *>("carplayMicrophoneMode"); QVERIFY(mode);
+        QCOMPARE(mode->count(), 3);
+        mode->setCurrentIndex(mode->findData("real"));
+        auto *latency = widget.findChild<QComboBox *>("carplayAudioLatency");
+        latency->setCurrentIndex(latency->findData(120));
+        widget.findChild<QSlider *>("carplayMusicVolume")->setValue(75);
+        widget.findChild<QSlider *>("carplayVoiceVolume")->setValue(40);
+        widget.findChild<QPushButton *>("applyCarPlayAudio")->click();
+        const auto saved = CarPlayAudio::loadSettings();
+        QCOMPARE(saved.music,75); QCOMPARE(saved.voice,40); QCOMPARE(saved.buffer,120);
+        QCOMPARE(saved.microphoneMode,QString("real"));
+        CarPlayWidget reopened;
+        QCOMPARE(reopened.findChild<CarPlayClient *>()->audioSettings().voice,40);
+        QVERIFY(CarPlayAudio::isMusic(102,"media"));
+        QVERIFY(CarPlayAudio::isMusic(100,"default"));
+        QVERIFY(!CarPlayAudio::isMusic(101,"default"));
+        QVERIFY(!CarPlayAudio::isMusic(100,"speechRecognition"));
+        QVERIFY(!CarPlayAudio::isMusic(100,"alert"));
+        QVERIFY(!CarPlayAudio::createInput("[\"pulsesink\",\"wrong-direction\"]"));
+        QVERIFY(!CarPlayAudio::createOutput("[\"fakesrc\",\"invalid\"]"));
     }
 
     void mappedFramesKeepDecoderMemoryAliveAndConvertPaddedPlanes() {

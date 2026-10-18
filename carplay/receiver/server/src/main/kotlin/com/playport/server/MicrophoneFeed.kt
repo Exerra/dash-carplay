@@ -6,11 +6,14 @@ import java.io.Closeable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-/** A timed, encrypted silence input. It opens no capture device and enables no voice features. */
-internal class SilentMicrophone(config: MicrophoneConfig) : Closeable {
+/** One clock/counter sequence for captured input, falling back to silence between captured frames. */
+internal class MicrophoneFeed(config: MicrophoneConfig) : Closeable {
     private val lock = Any()
     private var closed = false
-    private val uplink: MicUplink
+    private val captured = java.util.ArrayDeque<ByteArray>()
+    private val opus = config.codec == AudioCodecKind.OPUS
+    private val frameBytes = config.frameBytes
+    val uplink: MicUplink
     private val executor = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "carplay-silent-input").apply { isDaemon = true }
     }
@@ -26,9 +29,16 @@ internal class SilentMicrophone(config: MicrophoneConfig) : Closeable {
             else ByteArray(config.frameBytes)
         executor.scheduleWithFixedDelay({
             synchronized(lock) {
-                if (!closed) uplink.send(silence, config.samplesPerPacket)
+                if (!closed) uplink.send(captured.pollFirst() ?: silence, config.samplesPerPacket)
             }
         }, 0, config.frameMillis.toLong(), TimeUnit.MILLISECONDS)
+    }
+
+    fun offer(payload: ByteArray, isOpus: Boolean): Boolean = synchronized(lock) {
+        if (closed || isOpus != opus || payload.isEmpty() || (opus && payload.size > 4096) || (!opus && payload.size != frameBytes)) return false
+        while (captured.size >= 3) captured.removeFirst()
+        captured.addLast(payload)
+        true
     }
 
     override fun close() = synchronized(lock) {

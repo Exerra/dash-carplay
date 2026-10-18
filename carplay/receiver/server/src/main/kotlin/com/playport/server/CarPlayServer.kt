@@ -60,8 +60,8 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
         config.hevc,
     )
     val hub = WebHub(config, display)
-    val bridge = WebBridge(hub, config.silentMicrophone)
-    val media = CarPlayMediaEngine(bridge, microphoneEnabled = true, audioCaptureDirectory = null)
+    val bridge = WebBridge(hub, config.usesSilentMicrophone)
+    val media = CarPlayMediaEngine(bridge, microphoneEnabled = config.offersMicrophone, audioCaptureDirectory = null)
 
     private val pairings = loadPairings()
     val mfi: MfiAuthenticator by lazy { MfiIdentity.load(config) }
@@ -99,7 +99,7 @@ class CarPlayServer(val config: ServerConfig, private val configStore: ConfigSto
             port = config.airPlayPort,
             entertainmentSampleRate = 48_000,
             hevc = display.hevc,
-            microphone = true,
+            microphone = config.offersMicrophone,
             manufacturer = config.manufacturer,
             model = config.model,
             oemLabel = config.deviceName,

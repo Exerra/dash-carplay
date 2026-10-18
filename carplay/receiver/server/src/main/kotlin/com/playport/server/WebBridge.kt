@@ -66,43 +66,26 @@ class WebBridge(private val hub: WebHub, private val silentMicrophone: Boolean =
         hub.broadcastAudioFlushed(type)
     }
 
-    @Volatile private var microphone: MicUplink? = null
-    private var silentInput: SilentMicrophone? = null
+    @Volatile private var microphone: MicrophoneFeed? = null
 
     @Synchronized override fun onMicrophoneStarted(type: Int, config: MicrophoneConfig) {
         endMicrophone()
-        if (silentMicrophone) {
-            silentInput = SilentMicrophone(config)
-            return
-        }
-        val uplink = MicUplink(config)
-        microphone = uplink
-        hub.microphoneRequested(uplink)
+        val feed = MicrophoneFeed(config)
+        microphone = feed
+        if (!silentMicrophone) hub.microphoneRequested(feed.uplink)
     }
 
-    override fun onMicrophoneStopped(type: Int) {
-        endMicrophone()
-    }
+    override fun onMicrophoneStopped(type: Int) { endMicrophone() }
 
-    /** Called by the server when the session ends (the engine clears its state silently). */
     @Synchronized fun endMicrophone() {
-        silentInput?.close()
-        silentInput = null
         val current = microphone
         microphone = null
-        if (current != null) {
-            current.close()
-            hub.microphoneStopped()
-        }
+        current?.close()
+        if (current != null && !silentMicrophone) hub.microphoneStopped()
     }
 
-    /** Routes browser microphone payloads (raw PCM or Opus) to the phone. */
-    fun sendMicrophonePayload(payload: ByteArray, opus: Boolean): Boolean {
-        val uplink = microphone ?: return false
-        val samples = if (opus) 960 else payload.size / (2 * maxOf(1, uplink.channels))
-        uplink.send(payload, samples)
-        return true
-    }
+    fun sendMicrophonePayload(payload: ByteArray, opus: Boolean): Boolean =
+        !silentMicrophone && (microphone?.offer(payload, opus) ?: false)
 
     /** Asks the phone for a keyframe; called when a browser joins or reports a decode stall. */
     fun requestKeyFrame(streamType: Int) {

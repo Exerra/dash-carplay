@@ -26,6 +26,7 @@ data class ServerConfig(
     val mfiRemoteToken: String? = null,
     val wireless: Boolean = false,
     val silentMicrophone: Boolean = false,
+    val microphoneMode: String = System.getenv("CARPLAY_MIC_MODE")?.takeIf { it in listOf("silent", "phone", "real") } ?: "legacy",
     val wifiSsid: String? = null,
     val wifiPassphrase: String? = null,
     val wifiChannel: Int = 0,
@@ -37,6 +38,8 @@ data class ServerConfig(
     val accessToken: String = generateToken(),
 ) {
     val mfiDirectory: Path get() = identityDir.resolve("offline-mfi")
+    val offersMicrophone: Boolean get() = microphoneMode != "phone"
+    val usesSilentMicrophone: Boolean get() = microphoneMode == "silent" || (microphoneMode == "legacy" && silentMicrophone)
 
     companion object {
         private const val TOKEN_BYTES = 16
@@ -84,6 +87,9 @@ data class ServerConfig(
                     "--mfi-token" -> config = config.copy(mfiRemoteToken = nextValue(flag))
                     "--wireless" -> config = config.copy(wireless = true)
                     "--silent-microphone" -> config = config.copy(silentMicrophone = true)
+                    "--microphone-mode" -> config = config.copy(microphoneMode = nextValue(flag).also {
+                        require(it in listOf("silent", "phone", "real")) { "Choose silent, phone or real microphone mode" }
+                    })
                     "--wifi-ssid" -> config = config.copy(wifiSsid = nextValue(flag))
                     "--wifi-passphrase" -> config = config.copy(wifiPassphrase = nextValue(flag))
                     "--wifi-channel" -> config = config.copy(wifiChannel = nextValue(flag).toInt())
@@ -120,6 +126,7 @@ data class ServerConfig(
 
                 Options:
                   --silent-microphone      Offer a silent PCM input for playback without a microphone
+                  --microphone-mode MODE  silent (compatibility), phone (no input), or real (captured input)
                   --device-name <name>      AirPlay device name shown on the iPhone (default: playport)
                   --model <model>           AirPlay model string (default: playport)
                   --manufacturer <name>     Manufacturer string (default: playport)

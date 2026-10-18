@@ -6,9 +6,9 @@ Dash over an authenticated loopback WebSocket. Dash decodes H.264/audio with
 GStreamer and renders through Qt. A browser is not needed.
 
 Current scope: same-LAN wireless bootstrap, native video, touch/mouse/knob input,
-home control, theme and volume, and decoded audio output. Real microphone capture, echo
-cancellation, automatic hotspot setup and wired USB are not implemented in the
-native integration. A Pi 5 has authenticated the test iPhone and displayed real
+home control, theme and volume, decoded audio output, and PCM/Opus microphone
+capture. Echo cancellation, automatic hotspot setup and wired USB are not implemented
+in the native integration. A Pi 5 has authenticated the test iPhone and displayed real
 CarPlay video with working touch and HDMI music playback. The user confirmed
 smoother video after the buffering fix. See `STATUS.md` for validation limits.
 Android Auto has priority: starting CarPlay is blocked while AA is connected, and
@@ -18,7 +18,8 @@ an incoming AA connection stops the CarPlay backend.
 
 The existing Dash build dependencies remain required. Add a Java 21+ JDK, Python
 3.9+, BlueZ and `dbus-next` for the receiver. The native page needs GStreamer app,
-video, `avdec_h264`/H.264 parser and audio plugins (including AAC/Opus decoding).
+video, `avdec_h264`/H.264 parser and audio plugins (including AAC/Opus decoding,
+`opusenc` for microphone capture, and the platform audio-device provider).
 The first hardware target runs 64-bit Raspberry Pi OS Bookworm. Its existing Dash
 dependencies were reused; `python3-dbus-next` supplies the Linux bridge dependency.
 Java 21 is installed separately because its configured Bookworm repositories do
@@ -78,7 +79,7 @@ The **OpenDash** icon on the CarPlay home screen also opens this management scre
 using CarPlay's OEM return action. Its icon reuses Dash's existing logo. This does
 not require installing an iPhone app.
 
-Management has separate **Phones**, **Display** and **Setup** screens, with large
+Management has separate **Phones**, **Display**, **Audio** and **Setup** screens, with large
 touch targets and swipe scrolling. Tap a selector to open a large list; tap a name
 or Wi-Fi field for the on-screen keyboard. Custom dimensions use a number pad
 that accepts only valid even pixel sizes. The layout supports 800×480 screens and
@@ -100,6 +101,30 @@ configuration, and sends live changes over the control channel.
 - **Apply & reconnect** saves display settings and restarts an active connection.
   With CarPlay stopped, it saves them for the next connection. The default remains
   800×480 at 30 fps; higher settings still need performance checks on the target.
+
+**Audio** is also reachable through **Settings → CarPlay → Audio**. It offers:
+
+- Speaker selection, including HDMI, USB and connected Bluetooth outputs exposed
+  by the system audio server. A missing speaker falls back to the system default.
+- Responsive (60 ms, recommended), Minimum delay (40 ms), Balanced (120 ms) and
+  Extra buffering (200 ms) playback profiles. These are output-buffer requests,
+  not guarantees of end-to-end latency.
+- Independent Music and Voice & alerts levels, multiplied by Dash's master volume.
+  Prompts already mixed into music cannot be adjusted separately.
+- A short **Test speakers** tone using the saved speaker/volume settings.
+- **Compatibility** microphone mode (timed silence, no capture), **Phone** mode
+  (no microphone advertised), or a selected **USB / system microphone**.
+  Mode changes reconnect CarPlay; speaker, level and buffer changes rebuild only
+  audio playback. Selecting another real microphone restarts just capture.
+
+The RØDE NT-USB Mini was tested on the Pi: the user confirmed that Siri hears and
+answers through it, while music remains on HDMI and the audio controls work.
+Capture is resampled and packetized to the phone's requested PCM/Opus format;
+a bounded feed falls back to silence between captured frames without resetting
+its encryption counters. Capture stops when the phone releases the stream or
+the receiver disconnects. There is no microphone recording to disk. Echo
+cancellation is not implemented, and full phone-call behavior still needs testing.
+Phone mode deliberately leaves voice/audio routing decisions to the iPhone.
 
 Phone names, selection and display settings persist in Dash settings. The setup
 wizard performs pairing on the Pi through BlueZ and shows confirmation inside

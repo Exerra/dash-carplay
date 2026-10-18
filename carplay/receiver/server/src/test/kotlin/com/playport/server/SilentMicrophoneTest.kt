@@ -14,6 +14,37 @@ class SilentMicrophoneTest {
     @Test fun sendsTimedEncryptedPcmSilenceAndStopsAtClose() = verifyPackets(AudioCodecKind.LPCM)
     @Test fun sendsTimedEncryptedOpusSilenceAndStopsAtClose() = verifyPackets(AudioCodecKind.OPUS)
 
+    @Test fun capturedAudioAndSilenceShareOneNonceAndTimestampSequence() {
+        val host = InetAddress.getLoopbackAddress()
+        DatagramSocket(0, host).use { receiver ->
+            receiver.soTimeout = 2000
+            val key = ByteArray(32) { it.toByte() }
+            val config = MicrophoneConfig("speechRecognition",16000,1,100,20,host,receiver.localPort,key)
+            val nonces = mutableSetOf<List<Byte>>()
+            var previous: Int? = null
+            fun receive(): ByteArray {
+                val packet = DatagramPacket(ByteArray(4096),4096); receiver.receive(packet)
+                val wire = packet.data.copyOf(packet.length)
+                assertTrue(nonces.add(wire.takeLast(8)))
+                val timestamp = (4..7).fold(0) { value,index -> (value shl 8) or (wire[index].toInt() and 255) }
+                previous?.let { assertEquals(config.samplesPerPacket,timestamp-it) }; previous=timestamp
+                val nonce=ByteArray(12); wire.copyInto(nonce,4,wire.size-8)
+                return AirPlayCrypto.chachaOpen(key,nonce,wire.copyOfRange(12,wire.size-8),wire.copyOfRange(4,12))
+            }
+            MicrophoneFeed(config).use { feed ->
+                assertTrue(receive().all { it == 0.toByte() })
+                assertFalse(feed.offer(ByteArray(config.frameBytes),true))
+                assertFalse(feed.offer(ByteArray(3),false))
+                val captured=ByteArray(config.frameBytes) { 7 }
+                assertTrue(feed.offer(captured,false))
+                var found=false
+                repeat(5) { if (receive().contentEquals(captured)) found=true }
+                assertTrue(found)
+                assertTrue(receive().all { it == 0.toByte() })
+            }
+        }
+    }
+
     private fun verifyPackets(codec: AudioCodecKind) {
         val host = InetAddress.getByName("127.0.0.1")
         DatagramSocket(0, host).use { receiver ->
@@ -27,7 +58,7 @@ class SilentMicrophoneTest {
             }
             val first: ByteArray
             val second: ByteArray
-            SilentMicrophone(config).use {
+            MicrophoneFeed(config).use {
                 first = receive()
                 second = receive()
             }

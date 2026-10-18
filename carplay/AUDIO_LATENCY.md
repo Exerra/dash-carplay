@@ -96,8 +96,10 @@ Raw timing and negotiated-property samples are in `performance-results/`.
   but still approximately one second of delay; the measurements then identified
   and corrected the missing FLUSH path and stale packet handling.
 
-For output devices or networks needing a larger safety margin, set
-`CARPLAY_AUDIO_BUFFER_MS=200` in Dash's launch environment. Valid overrides are
+For output devices or networks needing a larger safety margin, choose **Extra
+buffering** under CarPlay → Audio. A saved UI profile takes precedence over
+`CARPLAY_AUDIO_BUFFER_MS` in Dash's launch environment; that variable remains
+the fallback when no profile has been saved. Valid overrides are
 40–500 ms; missing/invalid values select 60 ms. This restores the previous buffer
 request while keeping correct FLUSH behavior. Lower values are not automatically
 better: Wi-Fi delivery and device scheduling still require some headroom.

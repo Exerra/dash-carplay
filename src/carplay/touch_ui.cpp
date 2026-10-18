@@ -96,6 +96,9 @@ void CarPlayTouch::theme(QWidget *widget, bool night) {
         "QScrollBar::handle:vertical { background:%4; min-height:50px; border-radius:7px; }"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }"
         "QCheckBox { spacing:14px; padding:10px 0; } QCheckBox::indicator { width:28px; height:28px; }"
+        "QSlider::groove:horizontal { background:%4; height:6px; border-radius:3px; }"
+        "QSlider::sub-page:horizontal { background:%7; border-radius:3px; }"
+        "QSlider::handle:horizontal { background:%7; width:28px; margin:-11px 0; border-radius:14px; }"
     ).arg(text, background, panel, border, muted, night ? "#edaaa2" : "#ac3028", color.name(), foreground.name(), pressed.name()));
 }
 

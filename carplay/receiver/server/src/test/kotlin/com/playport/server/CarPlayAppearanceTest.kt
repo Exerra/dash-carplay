@@ -9,6 +9,20 @@ import org.junit.rules.TemporaryFolder
 class CarPlayAppearanceTest {
     @get:Rule val temporary = TemporaryFolder()
 
+    @Test fun microphoneModesChangeCapabilitiesWithoutRemovingAudioOutput() {
+        for (mode in listOf("silent","phone","real")) {
+            val config = ServerConfig(identityDir=temporary.newFolder("identity-"+mode).toPath(),
+                stateDir=temporary.newFolder("state-"+mode).toPath(),microphoneMode=mode,silentMicrophone=true)
+            assertEquals(mode!="phone", config.offersMicrophone)
+            assertEquals(mode=="silent", config.usesSilentMicrophone)
+            CarPlayServer(config).use { server ->
+                val formats = AirPlayInfoPlist.build(server.airPlayConfig)["audioFormats"] as List<*>
+                assertTrue(formats.isNotEmpty())
+                assertEquals(mode!="phone",formats.any { (it as Map<*, *>).containsKey("audioInputFormats") })
+            }
+        }
+    }
+
     @Test fun retainsDashAppearanceBeforeADeviceIsConnectedAndAcrossModeChanges() {
         val config = ServerConfig(identityDir=temporary.newFolder("identity").toPath(),
             stateDir=temporary.newFolder("state").toPath())
