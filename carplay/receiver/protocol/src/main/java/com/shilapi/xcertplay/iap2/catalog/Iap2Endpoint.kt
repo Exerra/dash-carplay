@@ -130,7 +130,7 @@ object Iap2Endpoints {
                     field(2, "isSupported", Iap2WireType.VOID),
                     field(3, "transportIdentifier", Iap2WireType.U16),
                     field(4, "isAvailable", Iap2WireType.VOID),
-                    field(5, "isEnabled", Iap2WireType.VOID),
+                    field(5, "supportsThemeAssets", Iap2WireType.VOID),
                 ),
             ),
             field(

@@ -82,7 +82,7 @@ void CarPlayTouch::theme(QWidget *widget, bool night) {
         "QPushButton[primary=true]:pressed { background:%9; }"
         "QPushButton[primary=true]:disabled { background:%4; border-color:%4; color:%5; }"
         "QPushButton[navigation=true] { background:transparent; border:0; color:%5; }"
-        "QPushButton[navigation=true]:checked { background:%7; color:%8; border:1px solid %7; }"
+        "QPushButton[toggle=true]:checked, QPushButton[navigation=true]:checked { background:%7; color:%8; border:1px solid %7; }"
         "QPushButton[danger=true] { color:%6; }"
         "QLineEdit, QComboBox, QSpinBox { background:%3; color:%1; border:1px solid %4; border-radius:10px; padding:8px 14px; }"
         "QLineEdit, QSpinBox { selection-background-color:%7; selection-color:%8; }"

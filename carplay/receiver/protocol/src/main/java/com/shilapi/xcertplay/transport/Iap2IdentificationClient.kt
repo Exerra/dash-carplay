@@ -55,6 +55,8 @@ data class Iap2IdentificationConfig(
     val vehicleStatusEnabled: Boolean = false,
     /** The charging inlets declared with [vehicleStatusEnabled]. */
     val chargingConnectors: EvChargingConnectors = EvChargingConnectors.CCS2_TYPE2,
+    /** Opt in to the Ultra theme-assets capability; this is not a complete Ultra implementation. */
+    val carPlayUltra: Boolean = false,
 ) {
     constructor(
         name: String,
@@ -66,6 +68,7 @@ data class Iap2IdentificationConfig(
         wireless: Iap2WirelessIdentification,
         language: String = "en",
         externalAccessoryProtocol: String = "com.shilapi.xcertplay",
+        carPlayUltra: Boolean = false,
     ) : this(
         name = name,
         modelIdentifier = modelIdentifier,
@@ -77,6 +80,7 @@ data class Iap2IdentificationConfig(
         language = language,
         externalAccessoryProtocol = externalAccessoryProtocol,
         wireless = wireless,
+        carPlayUltra = carPlayUltra,
     )
 
     init {
@@ -235,8 +239,10 @@ class Iap2IdentificationClient(private val session: Iap2Session) {
                         string(1, wireless.ssid)
                         void(2)
                         u16(3, 1)
-                        void(4)
-                        void(5)
+                        void(4) // Supports wireless CarPlay.
+                        // Sub-parameter 5 means theme-assets support, not receiver availability.
+                        // iOS uses it for the CarPlay Ultra pairing flow.
+                        if (config.carPlayUltra) void(5)
                     }
                 }
                 if (config.vehicleStatusEnabled) electricVehicleComponents(config.manufacturer, config.chargingConnectors)

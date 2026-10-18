@@ -77,6 +77,30 @@ class Iap2WirelessControlClientTest {
     }
 
     @Test
+    fun ultraThemeAssetsAreOptInWithoutRemovingStandardWirelessCarPlay() {
+        val config = Iap2IdentificationConfig(
+            name = "OpenDash", modelIdentifier = "dash", manufacturer = "openDsh",
+            serialNumber = "test", firmwareVersion = "1.0", hardwareVersion = "1.0",
+            wireless = Iap2WirelessIdentification("AA:BB:CC:DD:EE:FF", "OpenDash-CarPlay"),
+        )
+        fun identification(value: Iap2IdentificationConfig) = parameters(
+            Iap2IdentificationClient.identificationInformation(value).payload,
+        )
+        val standard = identification(config)
+        val ultra = identification(config.copy(carPlayUltra = true))
+        val standardTransport = parameters(standard.single { it.id == 24 }.payload)
+        val ultraTransport = parameters(ultra.single { it.id == 24 }.payload)
+        assertTrue(standardTransport.any { it.id == 2 })
+        assertTrue(standardTransport.any { it.id == 4 })
+        assertFalse(standardTransport.any { it.id == 5 })
+        assertTrue(ultraTransport.single { it.id == 5 }.payload.isEmpty())
+        assertEquals(standardTransport.map { it.id }, ultraTransport.filter { it.id != 5 }.map { it.id })
+        for (parameter in standard.filter { it.id != 24 }) {
+            assertArrayEquals(parameter.payload, ultra.single { it.id == parameter.id }.payload)
+        }
+    }
+
+    @Test
     fun wirelessCarPlayUpdateReadsBooleanAvailability() {
         val frame = Iap2Frame(
             0x4e0d,

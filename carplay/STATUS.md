@@ -11,6 +11,9 @@ under Dash's `include/carplay`, `src/carplay`, and `app/pages` directories.
 
 ## Implemented
 
+- CarPlay Ultra theme-assets identification is opt-in under CarPlay → Setup and
+  defaults off. This controls the pairing advertisement, not full Ultra features.
+
 - Optional `CARPLAY_BUILD` CMake switch and a CarPlay page appended to the existing
   page list. Existing numeric page and shortcut IDs are preserved.
 - Native H.264 decoding, latest-frame rendering, letterboxed touch/mouse mapping,

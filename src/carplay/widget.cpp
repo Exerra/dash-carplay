@@ -157,6 +157,18 @@ void CarPlayWidget::init() {
 
     auto *advanced = new QWidget(sections); auto *form = new QFormLayout(advanced);
     form->setContentsMargins(0,4,0,4); form->setSpacing(12); form->setRowWrapPolicy(QFormLayout::WrapAllRows);
+    auto *ultra = button("", "carplayUltra", advanced); ultra->setCheckable(true); ultra->setProperty("toggle", true);
+    ultra->setChecked(saved.value("CarPlay/ultra_enabled", false).toBool());
+    auto ultraLabel = [ultra](bool enabled) { ultra->setText(enabled ? "CarPlay Ultra · ON" : "CarPlay Ultra · OFF"); };
+    ultraLabel(ultra->isChecked()); form->addRow(ultra);
+    auto *ultraHint = new QLabel("Use the experimental CarPlay Ultra pairing mode. Full Ultra vehicle features are not available. Changing this reconnects CarPlay.", advanced);
+    ultraHint->setWordWrap(true); ultraHint->setProperty("secondary", true); form->addRow(ultraHint);
+    connect(ultra, &QPushButton::toggled, this, [this, ultraLabel](bool enabled) {
+        ultraLabel(enabled);
+        QSettings saved; saved.setValue("CarPlay/ultra_enabled", enabled); saved.sync();
+        if (process_.state() != QProcess::NotRunning) { restartPending_ = true; stopReceiver(); }
+        else status_->setText("CarPlay mode saved. Connect an iPhone to use it.");
+    });
     auto *setupHint = new QLabel("Connection details are already configured on this Pi. Change them only when using another Wi-Fi network or receiver installation.", advanced);
     setupHint->setWordWrap(true); setupHint->setProperty("secondary", true); form->addRow(setupHint);
     ssid_ = new CarPlayTouchEdit(saved.value("CarPlay/ssid", qEnvironmentVariable("CARPLAY_WIFI_SSID")).toString(), "Wi-Fi network", advanced);
@@ -313,6 +325,7 @@ void CarPlayWidget::startReceiver() {
     environment.insert("CARPLAY_WIDTH", QString::number(width_->value())); environment.insert("CARPLAY_HEIGHT", QString::number(height_->value()));
     environment.insert("CARPLAY_FPS", QString::number(fps_->currentData().toInt()));
     environment.insert("CARPLAY_MIC_MODE", client_->audioSettings().microphoneMode);
+    environment.insert("CARPLAY_ULTRA", saved.value("CarPlay/ultra_enabled", false).toBool() ? "1" : "0");
     process_.setProcessEnvironment(environment);
     process_.setProgram(saved.value("CarPlay/receiver_command", QString(DASH_CARPLAY_RUNNER)).toString()); process_.setArguments(QStringList());
     start_->setEnabled(false); stop_->setEnabled(true);

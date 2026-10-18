@@ -25,6 +25,7 @@ data class ServerConfig(
     val mfiRemoteServer: String? = null,
     val mfiRemoteToken: String? = null,
     val wireless: Boolean = false,
+    val carPlayUltra: Boolean = System.getenv("CARPLAY_ULTRA") == "1",
     val silentMicrophone: Boolean = false,
     val microphoneMode: String = System.getenv("CARPLAY_MIC_MODE")?.takeIf { it in listOf("silent", "phone", "real") } ?: "legacy",
     val wifiSsid: String? = null,
@@ -86,6 +87,7 @@ data class ServerConfig(
                     "--mfi-server" -> config = config.copy(mfiRemoteServer = nextValue(flag))
                     "--mfi-token" -> config = config.copy(mfiRemoteToken = nextValue(flag))
                     "--wireless" -> config = config.copy(wireless = true)
+                    "--carplay-ultra" -> config = config.copy(carPlayUltra = true)
                     "--silent-microphone" -> config = config.copy(silentMicrophone = true)
                     "--microphone-mode" -> config = config.copy(microphoneMode = nextValue(flag).also {
                         require(it in listOf("silent", "phone", "real")) { "Choose silent, phone or real microphone mode" }
@@ -143,6 +145,7 @@ data class ServerConfig(
                   --state-dir <path>        AirPlay identity + pairing state (default: ~/.playport)
                   --mfi-server <url>        Remote MFi server address (alternative to offline identity)
                   --mfi-token <token>       Remote MFi bearer token
+                  --carplay-ultra           Advertise experimental Ultra theme-assets support (default: off)
                   --wireless                Enable the Bluetooth wireless bootstrap
                   --wifi-ssid <ssid>        Wi-Fi network the phone should join (default: auto-detect)
                   --wifi-passphrase <pass>  Wi-Fi passphrase handed to the phone

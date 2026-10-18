@@ -277,3 +277,26 @@ Qt 5 Test and the GStreamer `x264enc` test-fixture encoder in addition to the no
 native dependencies. It does not claim an end-to-end phone connection.
 On macOS the test limits plugin scanning to its required GStreamer modules, avoiding
 unrelated hardware/Python plugin probes in Homebrew's bundled plugin directory.
+
+## Standard CarPlay / Ultra identification
+
+CarPlay → Setup has a touch toggle for **CarPlay Ultra**, off by default, including
+existing installations. Changing it saves the choice and restarts the running
+receiver. Off advertises standard wireless CarPlay; on restores the experimental
+Ultra theme-assets advertisement. It does not implement Ultra vehicle controls,
+clusters or downloaded themes. Audio, display appearance and the OpenDash return
+icon work in either mode. iOS may cache the previous pairing label; if it persists,
+forget OpenDash under Settings → General → CarPlay and pair again.
+
+The native launcher explicitly passes `CARPLAY_ULTRA=0/1`. Standalone receivers
+can opt in with `CARPLAY_ULTRA=1` or `--carplay-ultra`. The switch controls iAP2
+IdentificationInformation WirelessCarPlayTransport (24), sub-parameter 5. That
+field was incorrectly called `isEnabled`; it actually advertises theme assets.
+Sub-parameter 4, standard CarPlay support, remains present.
+
+Protocol trace reference: the iOS 26.1
+[transport parser](https://github.com/EthanArbuckle/iPhone18-3_26.1_23B85_Restore/blob/main/System/Library/PrivateFrameworks/CoreAccessories.framework/Support/CoreAccessories/CoreAccessories_08.mm)
+copies sub-parameter 5 to the theme-assets identification flag, exposed by
+`iap2_identification_isIdentifiedForThemeAssets` in
+[CoreAccessories_19.mm](https://github.com/EthanArbuckle/iPhone18-3_26.1_23B85_Restore/blob/main/System/Library/PrivateFrameworks/CoreAccessories.framework/Support/CoreAccessories/CoreAccessories_19.mm).
+These are reverse-engineered implementation references, not an official Ultra SDK.

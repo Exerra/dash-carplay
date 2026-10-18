@@ -96,6 +96,7 @@ class WirelessBootstrap(private val server: CarPlayServer) : Closeable {
                 firmwareVersion = "1.0.0",
                 hardwareVersion = "1.0",
                 wireless = Iap2WirelessIdentification(hostBluetoothMac, wifi.ssid),
+                carPlayUltra = config.carPlayUltra,
             )
             val endpoint = Iap2WirelessCarPlayEndpoint(
                 ssid = wifi.ssid,

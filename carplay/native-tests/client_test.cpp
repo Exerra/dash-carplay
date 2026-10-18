@@ -41,6 +41,19 @@ class CarPlayNativeTest : public QObject {
         settings.setValue("CarPlay/bluetooth_address", "00:11:22:33:44:55");
     }
 
+    void ultraDefaultsOffAndPersistsTheExplicitChoice() {
+        CarPlayWidget widget;
+        auto *toggle = widget.findChild<QPushButton *>("carplayUltra"); QVERIFY(toggle);
+        QVERIFY(!toggle->isChecked());
+        toggle->click();
+        QVERIFY(QSettings().value("CarPlay/ultra_enabled").toBool());
+        CarPlayWidget reopened;
+        auto *savedToggle = reopened.findChild<QPushButton *>("carplayUltra");
+        QVERIFY(savedToggle->isChecked());
+        savedToggle->click();
+        QVERIFY(!QSettings().value("CarPlay/ultra_enabled").toBool());
+    }
+
     void audioSettingsPersistWithoutStartingAReceiverAndKeepVoiceSeparate() {
         CarPlayWidget widget;
         auto *client = widget.findChild<CarPlayClient *>(); QVERIFY(client);
