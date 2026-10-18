@@ -75,6 +75,8 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
   the user confirmed management and returning to CarPlay work. A direct test of
   the wizard's real Bluetooth controller found the existing paired iPhone. A
   second, newly paired phone still needs end-to-end acceptance.
+- The user confirmed the OpenDash icon appears inside CarPlay, opens the native
+  management screen and returns to the CarPlay picture successfully.
 
 - Raspberry Pi 5, 4 GB RAM, aarch64, Debian/Raspberry Pi OS 12 Bookworm; existing
   OpenAuto/AASDK and QtGStreamer installations reused.
@@ -155,6 +157,10 @@ Linux-only Android Auto/BlueZ dependency stack still needs the target environmen
 
 1. Check long-session CPU/latency and reconnect behavior after a full Pi reboot.
 2. Test switching between Android Auto and CarPlay with a real Android phone.
+3. Complete new-device pairing and switching with a second physical iPhone; the
+   paired-phone discovery path and two-profile persistence/routing are tested.
+4. Measure higher resolutions/60 fps on the Pi; the 800×480/30 fps mode remains
+   the default, and exact selected dimensions/rate are verified in receiver-launch tests.
 
 Real microphone capture/Siri conversations, echo cancellation, phone-call acceptance,
 automatic AP management inside Dash and wired USB are outside this first prototype.
@@ -166,6 +172,8 @@ settings were saved under
 `/home/pi/dash-backups/carplay-working-2026-10-18-fxL873`, with SHA-256 checksums.
 Identity files and the private environment remain at their existing runtime paths.
 Use the `OpenDash-CarPlay` desktop shortcut to reopen this development setup.
+The subsequent wizard, display settings and confirmed in-CarPlay return icon build
+is saved separately at `/home/pi/dash-backups/carplay-ui-2026-10-18-bO7Yoq`.
 
 See `README.md` for build/run instructions. No credentials are committed or bundled
 in the receiver source; the extracted identity remains in the workspace's external
