@@ -141,6 +141,12 @@ automatic AP management inside Dash and wired USB are outside this first prototy
 The current receiver uses an OS-managed Wi-Fi LAN or hotspot. The initial mode is
 H.264, 800×480 at 30 fps.
 
+The confirmed working Pi executable, receiver distribution, launcher and Dash
+settings were saved under
+`/home/pi/dash-backups/carplay-working-2026-10-18-fxL873`, with SHA-256 checksums.
+Identity files and the private environment remain at their existing runtime paths.
+Use the `OpenDash-CarPlay` desktop shortcut to reopen this development setup.
+
 See `README.md` for build/run instructions. No credentials are committed or bundled
 in the receiver source; the extracted identity remains in the workspace's external
 `runtime-assets` directory.
